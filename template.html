@@ -31,7 +31,9 @@
         }
     </script>
     <style>
+        /* 核心修复：添加 !important 防止 Tailwind 的 flex/block 类覆盖隐藏效果 */
         [v-cloak] { display: none !important; }
+        
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
@@ -40,7 +42,10 @@
             backdrop-filter: blur(40px);
             -webkit-backdrop-filter: blur(40px);
             border: 1px solid rgba(255, 255, 255, 0.6);
-            box-shadow: 0 1px 2px rgba(0,0,0,0.02), 0 8px 32px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(255,255,255,0.2);
+            box-shadow: 
+                0 1px 2px rgba(0,0,0,0.02),
+                0 8px 32px rgba(0,0,0,0.04),
+                inset 0 0 0 1px rgba(255,255,255,0.2);
         }
         
         .glass-input {
@@ -58,21 +63,31 @@
             transition: transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1);
         }
         
+        /* Tooltip 动画 - 响应式优化 */
         .tooltip-content {
             visibility: hidden;
             opacity: 0;
+            /* 移动端默认: 靠左定位，微调偏移，避免居中导致的左侧溢出 */
             left: -2rem; 
             transform: translateY(10px);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
+        
         .group:hover .tooltip-content {
             visibility: visible;
             opacity: 1;
             transform: translateY(0);
         }
+
+        /* PC 端 (md): 恢复完美居中 */
         @media (min-width: 768px) {
-            .tooltip-content { left: 50%; transform: translateY(10px) translateX(-50%); }
-            .group:hover .tooltip-content { transform: translateY(0) translateX(-50%); }
+            .tooltip-content {
+                left: 50%;
+                transform: translateY(10px) translateX(-50%);
+            }
+            .group:hover .tooltip-content {
+                transform: translateY(0) translateX(-50%);
+            }
         }
 
         /* 下拉选择框动画 */
@@ -198,7 +213,6 @@
 
     <!-- Setup Wizard (Initialization) -->
     <div v-if="!initialized && !loadingCheckInit && !criticalError" class="fixed inset-0 z-50 flex flex-col items-center justify-center p-6 bg-[#F2F2F7]">
-        <!-- ... (Setup Wizard content remains same) ... -->
         <div class="glass-panel w-full max-w-lg p-10 rounded-[48px] shadow-2xl border border-white/80">
             <div class="text-center mb-8">
                 <h1 class="text-3xl font-extrabold text-[#1C1C1E] mb-2">欢迎使用 CDT Monitor</h1>
@@ -239,7 +253,6 @@
 
     <!-- Admin Config Editor -->
     <div v-if="isAdmin && config" class="w-full max-w-5xl mt-12 mb-20 animate-fade-in-up space-y-8">
-        <!-- ... (Config Editor content remains same) ... -->
         <div class="flex items-center gap-4">
             <h2 class="text-xl font-bold">系统配置</h2>
             <div class="h-px bg-gray-300 flex-1"></div>
@@ -265,10 +278,13 @@
                         <div class="space-y-1 relative">
                             <div class="flex items-center gap-1">
                                 <label class="text-xs font-medium text-gray-500 ml-2">停机模式</label>
+                                <!-- Tooltip Trigger -->
                                 <div class="group relative flex items-center">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 text-gray-400 cursor-help hover:text-gray-600 transition-colors">
                                       <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                                     </svg>
+                                    
+                                    <!-- Tooltip Content -->
                                     <div class="tooltip-content absolute bottom-full mb-2 w-64 md:w-80 p-4 bg-[#1C1C1E]/95 backdrop-blur-md text-white text-xs rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.3)] z-50 border border-gray-700 pointer-events-none text-left leading-relaxed">
                                         <div class="space-y-3">
                                             <div>
@@ -280,13 +296,15 @@
                                             <div>
                                                 <h4 class="text-green-400 font-bold mb-1">节省停机模式 (StopCharging)</h4>
                                                 <p class="text-gray-300">计算资源(CPU/内存)、固定公网IP带宽暂停计费。</p>
-                                                <p class="text-gray-400 mt-1 opacity-80">注意：计算资源被回收，重新启动时可能因库存不足失败。如果未绑定弹性公网IP，重启后IP地址可能会变。</p>
+                                                <p class="text-gray-400 mt-1 opacity-80">注意：计算资源被回收，重新启动时可能因库存不足失败。固定公网IP可能会变，弹性公网IP(EIP)不会变。</p>
                                             </div>
                                         </div>
+                                        <!-- Arrow: 移动端靠左(left-10)，PC端居中 -->
                                         <div class="absolute top-full left-10 md:left-1/2 md:-translate-x-1/2 -mt-2 border-8 border-transparent border-t-[#1C1C1E]/95"></div>
                                     </div>
                                 </div>
                             </div>
+                            
                             <select v-model="config.shutdown_mode" class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none cursor-pointer">
                                 <option value="KeepCharging">普通停机 (保留IP/收费)</option>
                                 <option value="StopCharging">节省停机 (回收IP/免费)</option>
@@ -617,7 +635,7 @@
                 }
             };
 
-            // ... (Other functions remain same: toggleAdmin, performLogin, fetchConfig, saveConfig, sendTestEmail, addAccount, removeAccount, getInstanceStatusColor) ...
+            // ... (Other functions remain same) ...
             
             const toggleAdmin = () => {
                 if (isAdmin.value) {
