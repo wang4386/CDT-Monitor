@@ -1,7 +1,6 @@
 <?php
 session_start();
 
-// 核心修复：关闭页面输出的 PHP 错误，避免破坏 JSON 格式
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED);
 ini_set('display_errors', 0);
 
@@ -14,7 +13,6 @@ $action = $_GET['action'] ?? 'view';
 
 // ---------------- 公开接口 ----------------
 
-// 1. 检查初始化状态
 if ($action === 'check_init') {
     header('Content-Type: application/json');
     $initError = $app->getInitError();
@@ -26,7 +24,6 @@ if ($action === 'check_init') {
     exit;
 }
 
-// 2. 初始化系统
 if ($action === 'setup') {
     header('Content-Type: application/json');
     if ($app->isInitialized()) {
@@ -49,7 +46,6 @@ if ($action === 'setup') {
     exit;
 }
 
-// 3. 登录
 if ($action === 'login') {
     $data = json_decode(file_get_contents('php://input'), true);
     if ($app->login($data['password'] ?? '')) {
@@ -61,13 +57,11 @@ if ($action === 'login') {
     exit;
 }
 
-// 4. 检查登录状态
 if ($action === 'check_login') {
     echo json_encode(['logged_in' => isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true]);
     exit;
 }
 
-// 5. 获取状态数据
 if ($action === 'get_status') {
     header('Content-Type: application/json; charset=utf-8');
     $initError = $app->getInitError();
@@ -109,11 +103,22 @@ if ($action === 'send_test_email') {
     exit;
 }
 
+// 新增：手动刷新单个账号状态
+if ($action === 'refresh_account') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    $id = $data['id'] ?? 0;
+    if ($app->refreshAccount($id)) {
+        echo json_encode(['success' => true]);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Refresh failed']);
+    }
+    exit;
+}
+
 if ($action === 'logout') {
     session_destroy();
     echo json_encode(['success' => true]);
     exit;
 }
 
-// 渲染页面
 echo $app->renderTemplate();

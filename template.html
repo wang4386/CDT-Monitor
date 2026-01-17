@@ -25,15 +25,16 @@
                     },
                     backdropBlur: {
                         xs: '2px',
+                    },
+                    animation: {
+                        'spin-slow': 'spin 1.5s linear infinite',
                     }
                 }
             }
         }
     </script>
     <style>
-        /* 核心修复：添加 !important 防止 Tailwind 的 flex/block 类覆盖隐藏效果 */
         [v-cloak] { display: none !important; }
-        
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
@@ -42,10 +43,7 @@
             backdrop-filter: blur(40px);
             -webkit-backdrop-filter: blur(40px);
             border: 1px solid rgba(255, 255, 255, 0.6);
-            box-shadow: 
-                0 1px 2px rgba(0,0,0,0.02),
-                0 8px 32px rgba(0,0,0,0.04),
-                inset 0 0 0 1px rgba(255,255,255,0.2);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02), 0 8px 32px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(255,255,255,0.2);
         }
         
         .glass-input {
@@ -63,43 +61,25 @@
             transition: transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1);
         }
         
-        /* Tooltip 动画 - 响应式优化 */
         .tooltip-content {
             visibility: hidden;
             opacity: 0;
-            /* 移动端默认: 靠左定位，微调偏移，避免居中导致的左侧溢出 */
             left: -2rem; 
             transform: translateY(10px);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        
         .group:hover .tooltip-content {
             visibility: visible;
             opacity: 1;
             transform: translateY(0);
         }
-
-        /* PC 端 (md): 恢复完美居中 */
         @media (min-width: 768px) {
-            .tooltip-content {
-                left: 50%;
-                transform: translateY(10px) translateX(-50%);
-            }
-            .group:hover .tooltip-content {
-                transform: translateY(0) translateX(-50%);
-            }
+            .tooltip-content { left: 50%; transform: translateY(10px) translateX(-50%); }
+            .group:hover .tooltip-content { transform: translateY(0) translateX(-50%); }
         }
 
-        /* 下拉选择框动画 */
-        .dropdown-enter-active,
-        .dropdown-leave-active {
-            transition: all 0.2s ease;
-        }
-        .dropdown-enter-from,
-        .dropdown-leave-to {
-            opacity: 0;
-            transform: translateY(-10px);
-        }
+        .dropdown-enter-active, .dropdown-leave-active { transition: all 0.2s ease; }
+        .dropdown-enter-from, .dropdown-leave-to { opacity: 0; transform: translateY(-10px); }
 
         body { background-color: #F2F2F7; }
     </style>
@@ -108,7 +88,6 @@
 
 <div id="app" v-cloak class="min-h-screen p-6 md:p-12 flex flex-col items-center">
     
-    <!-- Header -->
     <header class="w-full max-w-5xl flex justify-between items-center mb-10 px-2">
         <div>
             <h1 class="text-2xl font-bold tracking-tight text-[#1C1C1E]">CDT Monitor</h1>
@@ -122,14 +101,23 @@
         </button>
     </header>
 
-    <!-- Main Status Grid -->
     <main v-if="initialized && !loading && !criticalError" class="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in-up">
         <div v-for="(item, index) in statusData" :key="index" 
              class="glass-panel rounded-[32px] p-6 flex flex-col justify-between relative overflow-hidden group hover:shadow-2xl transition-all duration-500">
-            <div class="absolute top-0 right-0 p-6 opacity-50">
-                <div class="w-2 h-2 rounded-full transition-colors duration-500" 
+            <div class="absolute top-0 right-0 p-6 opacity-50 flex gap-2">
+                <!-- 刷新按钮 (仅登录后可见) -->
+                <button v-if="isAdmin" @click="refreshSingle(item.id, index)" 
+                        class="p-1 rounded-full hover:bg-white/50 text-gray-400 hover:text-gray-600 transition-colors"
+                        :class="{'animate-spin': refreshingMap[index]}" 
+                        :disabled="refreshingMap[index]">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                    </svg>
+                </button>
+                <div class="w-2 h-2 rounded-full transition-colors duration-500 mt-1.5" 
                      :class="item.rate95 ? 'bg-red-500 shadow-[0_0_10px_rgba(255,59,48,0.5)]' : 'bg-green-500 shadow-[0_0_10px_rgba(52,199,89,0.5)]'"></div>
             </div>
+            
             <div>
                 <div class="flex items-center gap-2 mb-4">
                     <span class="px-2 py-1 bg-gray-100/50 rounded-lg text-[10px] font-bold tracking-wider text-gray-500 uppercase border border-white/40">{{ item.regionName }}</span>
@@ -163,7 +151,6 @@
                 </div>
             </div>
         </div>
-        <!-- If no accounts -->
         <div v-if="statusData.length === 0" class="col-span-full py-20 text-center text-gray-400">
             <p>暂无监控账号，请点击右上角登录管理员添加。</p>
         </div>
@@ -173,7 +160,7 @@
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800"></div>
     </div>
 
-    <!-- Critical Error Modal (e.g., DB Permissions) -->
+    <!-- Critical Error Modal -->
     <div v-if="criticalError" class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-red-50/50 backdrop-blur-sm">
         <div class="glass-panel w-full max-w-md p-8 rounded-[40px] shadow-xl border-red-200 bg-red-50/80">
             <div class="text-center">
@@ -186,13 +173,9 @@
                 <div class="mt-2 px-2 py-3">
                     <p class="text-sm text-red-700 break-words font-mono bg-red-100/50 p-2 rounded-lg">{{ criticalError }}</p>
                 </div>
-                <p class="mt-4 text-xs text-gray-500">
-                    请检查服务器目录权限，确保 Web 用户 (如 www) 对当前目录有写入权限以创建数据库文件。
-                </p>
+                <p class="mt-4 text-xs text-gray-500">请检查服务器目录权限，确保 Web 用户对当前目录有写入权限。</p>
                 <div class="mt-6">
-                    <button @click="location.reload()" class="w-full inline-flex justify-center rounded-xl border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:text-sm">
-                        重试
-                    </button>
+                    <button @click="location.reload()" class="w-full inline-flex justify-center rounded-xl border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:text-sm">重试</button>
                 </div>
             </div>
         </div>
@@ -205,28 +188,23 @@
             <h2 class="text-2xl font-bold mb-6 text-center">管理员验证</h2>
             <input type="password" v-model="passwordInput" placeholder="请输入配置密码" 
                    class="w-full glass-input px-4 py-3 rounded-xl border border-transparent focus:outline-none transition-all text-center text-lg mb-6">
-            <button @click="performLogin" class="w-full bg-[#1C1C1E] text-white py-3 rounded-2xl font-semibold tap-effect shadow-lg">
-                解锁控制台
-            </button>
+            <button @click="performLogin" class="w-full bg-[#1C1C1E] text-white py-3 rounded-2xl font-semibold tap-effect shadow-lg">解锁控制台</button>
         </div>
     </div>
 
-    <!-- Setup Wizard (Initialization) -->
+    <!-- Setup Wizard -->
     <div v-if="!initialized && !loadingCheckInit && !criticalError" class="fixed inset-0 z-50 flex flex-col items-center justify-center p-6 bg-[#F2F2F7]">
+        <!-- ... (Setup Wizard content remains same) ... -->
         <div class="glass-panel w-full max-w-lg p-10 rounded-[48px] shadow-2xl border border-white/80">
             <div class="text-center mb-8">
                 <h1 class="text-3xl font-extrabold text-[#1C1C1E] mb-2">欢迎使用 CDT Monitor</h1>
                 <p class="text-gray-500 text-sm">初次使用，请先配置核心参数。</p>
             </div>
-
             <div class="space-y-6">
-                <!-- Step 1: Admin Password -->
                 <div class="space-y-2">
                     <label class="text-xs font-bold text-gray-500 ml-2 uppercase tracking-wider">设置管理员密码 <span class="text-red-500">*</span></label>
                     <input type="text" v-model="setupData.admin_password" placeholder="用于登录后台管理" class="w-full glass-input rounded-2xl px-5 py-3 text-base focus:ring-2 focus:ring-gray-200 focus:bg-white transition-all">
                 </div>
-
-                <!-- Step 2: Global Settings (Simplified) -->
                 <div class="grid grid-cols-2 gap-4">
                     <div class="space-y-2">
                         <label class="text-xs font-bold text-gray-500 ml-2 uppercase tracking-wider">流量阈值 (%)</label>
@@ -240,12 +218,7 @@
                         </select>
                     </div>
                 </div>
-
-                <!-- Action -->
-                <button @click="performSetup" :disabled="!setupData.admin_password" 
-                    class="w-full bg-[#1C1C1E] text-white py-4 rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-4">
-                    初始化系统
-                </button>
+                <button @click="performSetup" :disabled="!setupData.admin_password" class="w-full bg-[#1C1C1E] text-white py-4 rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-4">初始化系统</button>
                 <p class="text-center text-[10px] text-gray-400">点击后将创建本地数据库并自动登录。</p>
             </div>
         </div>
@@ -274,37 +247,43 @@
                             <input v-model.number="config.traffic_threshold" type="number" min="1" max="100" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
                         </div>
                         
+                        <!-- 接口调用频率 -->
+                        <div class="space-y-1">
+                            <label class="text-xs font-medium text-gray-500 ml-2">接口调用频率</label>
+                            <select v-model.number="config.api_interval" class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none cursor-pointer">
+                                <option value="60">1 分钟 (高频)</option>
+                                <option value="180">3 分钟</option>
+                                <option value="300">5 分钟</option>
+                                <option value="600">10 分钟 (默认)</option>
+                                <option value="1800">30 分钟 (低频)</option>
+                            </select>
+                            <p class="text-[10px] text-gray-400 px-2 mt-1">控制更新状态和流量的频率。开关机操作触发时会自动加速至 1 分钟。</p>
+                        </div>
+
                         <!-- 停机模式 (带 Tooltip) -->
                         <div class="space-y-1 relative">
                             <div class="flex items-center gap-1">
                                 <label class="text-xs font-medium text-gray-500 ml-2">停机模式</label>
-                                <!-- Tooltip Trigger -->
                                 <div class="group relative flex items-center">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 text-gray-400 cursor-help hover:text-gray-600 transition-colors">
                                       <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                                     </svg>
-                                    
-                                    <!-- Tooltip Content -->
                                     <div class="tooltip-content absolute bottom-full mb-2 w-64 md:w-80 p-4 bg-[#1C1C1E]/95 backdrop-blur-md text-white text-xs rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.3)] z-50 border border-gray-700 pointer-events-none text-left leading-relaxed">
                                         <div class="space-y-3">
                                             <div>
                                                 <h4 class="text-orange-400 font-bold mb-1">普通停机模式 (KeepCharging)</h4>
                                                 <p class="text-gray-300">停止实例后保留实例的资源并继续收费。</p>
-                                                <p class="text-gray-400 mt-1 opacity-80">建议场景：更换操作系统、重新初始化云盘、更改实例规格、修改私网IP等操作。可避免启动失败。</p>
                                             </div>
                                             <div class="w-full h-px bg-gray-700/50"></div>
                                             <div>
                                                 <h4 class="text-green-400 font-bold mb-1">节省停机模式 (StopCharging)</h4>
                                                 <p class="text-gray-300">计算资源(CPU/内存)、固定公网IP带宽暂停计费。</p>
-                                                <p class="text-gray-400 mt-1 opacity-80">注意：计算资源被回收，重新启动时可能因库存不足失败。固定公网IP可能会变，弹性公网IP(EIP)不会变。</p>
                                             </div>
                                         </div>
-                                        <!-- Arrow: 移动端靠左(left-10)，PC端居中 -->
                                         <div class="absolute top-full left-10 md:left-1/2 md:-translate-x-1/2 -mt-2 border-8 border-transparent border-t-[#1C1C1E]/95"></div>
                                     </div>
                                 </div>
                             </div>
-                            
                             <select v-model="config.shutdown_mode" class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none cursor-pointer">
                                 <option value="KeepCharging">普通停机 (保留IP/收费)</option>
                                 <option value="StopCharging">节省停机 (回收IP/免费)</option>
@@ -317,7 +296,6 @@
                                 <option value="stop_and_notify">自动关机并告警 (默认)</option>
                                 <option value="notify_only">仅发送告警 (不关机)</option>
                             </select>
-                            <p class="text-[10px] text-gray-400 px-2 mt-1">达到流量阈值时触发的操作。</p>
                         </div>
 
                         <!-- 实例保活 (新增) -->
@@ -329,12 +307,8 @@
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 text-gray-400 cursor-help hover:text-gray-600 transition-colors">
                                       <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
                                     </svg>
-                                    
-                                    <!-- Tooltip Content -->
                                     <div class="tooltip-content absolute bottom-full mb-2 w-64 md:w-72 p-4 bg-[#1C1C1E]/95 backdrop-blur-md text-white text-xs rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.3)] z-50 border border-gray-700 pointer-events-none text-left leading-relaxed">
                                         <p class="text-gray-300">防止抢占式实例在<span class="text-green-400 font-bold">非关机时间段</span>被意外释放。</p>
-                                        <div class="w-full h-px bg-gray-700/50 my-2"></div>
-                                        <p class="text-gray-400 opacity-80">开启后，如果在“开机时间段”内检测到实例状态为“关机”且流量未超标，程序将尝试自动执行开机操作。</p>
                                         <div class="absolute top-full left-10 md:left-1/2 md:-translate-x-1/2 -mt-2 border-8 border-transparent border-t-[#1C1C1E]/95"></div>
                                     </div>
                                 </div>
@@ -430,7 +404,6 @@
                                        placeholder="输入地域名称或代码..." 
                                        class="w-full glass-input rounded-xl px-4 py-2 text-sm">
                                 
-                                <!-- 智能下拉提示框 -->
                                 <transition name="dropdown">
                                     <div v-show="regionSearchFocus === idx" class="absolute left-0 right-0 top-full mt-2 bg-white/90 backdrop-blur-md border border-gray-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto no-scrollbar">
                                         <ul>
@@ -502,15 +475,14 @@
             const showLoginModal = ref(false);
             const passwordInput = ref('');
             const sendingEmail = ref(false);
-            const criticalError = ref(null); // 新增：严重错误状态
+            const criticalError = ref(null); 
             
             const initialized = ref(true); 
             const loadingCheckInit = ref(true);
-            
-            // 下拉框状态管理
-            const regionSearchFocus = ref(-1); // 存储当前聚焦的账号索引
-            
-            // 阿里云地域数据
+            const regionSearchFocus = ref(-1); 
+            const refreshingMap = ref({}); // 用于跟踪每个卡片的刷新状态
+
+            // 阿里云地域数据 (...省略...)
             const aliyunRegions = [
                 { id: 'cn-hongkong', name: '中国香港' },
                 { id: 'ap-southeast-1', name: '新加坡' },
@@ -552,7 +524,8 @@
                 Accounts: []
             });
 
-            // 1. 先检查是否初始化
+            // ... (checkInitStatus, performSetup, checkLoginStatus remain same) ...
+            
             const checkInitStatus = async () => {
                 loadingCheckInit.value = true;
                 try {
@@ -570,7 +543,7 @@
                     if (data.initialized) {
                         checkLoginStatus();
                     } else {
-                        loading.value = false; // 显示初始化向导
+                        loading.value = false; 
                     }
                 } catch (e) {
                     console.error('Init check failed', e);
@@ -617,7 +590,8 @@
             };
 
             const fetchData = async () => {
-                loading.value = true;
+                // 首次加载才显示全局 loading
+                if (statusData.value.length === 0) loading.value = true;
                 try {
                     const res = await fetch('index.php?action=get_status');
                     const json = await res.json();
@@ -635,8 +609,27 @@
                 }
             };
 
+            const refreshSingle = async (id, index) => {
+                refreshingMap.value[index] = true;
+                try {
+                    const res = await fetch('index.php?action=refresh_account', {
+                        method: 'POST',
+                        body: JSON.stringify({ id: id })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        await fetchData(); // 刷新成功后重新拉取最新数据
+                    } else {
+                        console.error('Refresh failed');
+                    }
+                } catch (e) {
+                    console.error(e);
+                } finally {
+                    refreshingMap.value[index] = false;
+                }
+            };
+
             // ... (Other functions remain same) ...
-            
             const toggleAdmin = () => {
                 if (isAdmin.value) {
                     fetch('index.php?action=logout').then(() => {
@@ -704,7 +697,7 @@
 
             const addAccount = () => {
                 if(!config.value.Accounts) config.value.Accounts = [];
-                config.value.Accounts.push({ AccessKeyId: '', AccessKeySecret: '', maxTraffic: 200, regionId: 'cn-hongkong', instanceId: '', schedule: { enabled: false, startTime: '', stopTime: '' } });
+                config.value.Accounts.push({ AccessKeyId: '', AccessKeySecret: '', maxTraffic: 200, regionId: '', instanceId: '', schedule: { enabled: false, startTime: '', stopTime: '' } });
             };
 
             const removeAccount = (index) => { if(confirm('确定删除该账号配置？')) config.value.Accounts.splice(index, 1); };
@@ -720,8 +713,8 @@
 
             return {
                 statusData, loading, isAdmin, checkingLogin, showLoginModal, passwordInput, config, initialized, loadingCheckInit, setupData, criticalError,
-                regionSearchFocus, aliyunRegions, // 导出新变量
-                toggleAdmin, performLogin, saveConfig, sendTestEmail, sendingEmail, addAccount, removeAccount, getInstanceStatusColor, performSetup
+                regionSearchFocus, aliyunRegions, refreshingMap,
+                toggleAdmin, performLogin, saveConfig, sendTestEmail, sendingEmail, addAccount, removeAccount, getInstanceStatusColor, performSetup, refreshSingle
             };
         }
     }).mount('#app');

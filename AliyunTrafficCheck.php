@@ -16,9 +16,8 @@ class AliyunTrafficCheck
     private $configCache = [];
     private $accountsCache = [];
 
-    const API_INTERVAL = 600; 
-    // 新增：保活冷却时间 (秒)，防止短时间内连续重启/发信
-    const KEEP_ALIVE_COOLDOWN = 1800; // 30分钟
+    // 默认保活冷却时间
+    const KEEP_ALIVE_COOLDOWN = 1800; 
 
     public function __construct()
     {
@@ -79,7 +78,6 @@ class AliyunTrafficCheck
         $this->addColumnIfNotExists('accounts', 'traffic_used', 'REAL DEFAULT 0');
         $this->addColumnIfNotExists('accounts', 'instance_status', "TEXT DEFAULT 'Unknown'");
         $this->addColumnIfNotExists('accounts', 'updated_at', 'INTEGER DEFAULT 0');
-        // 新增字段：上次保活时间
         $this->addColumnIfNotExists('accounts', 'last_keep_alive_at', 'INTEGER DEFAULT 0');
     }
 
@@ -150,6 +148,7 @@ class AliyunTrafficCheck
             $this->saveSetting('shutdown_mode', $data['shutdown_mode']);
             $this->saveSetting('threshold_action', $data['threshold_action']);
             $this->saveSetting('keep_alive', isset($data['keep_alive']) && $data['keep_alive'] ? '1' : '0');
+            $this->saveSetting('api_interval', $data['api_interval'] ?? 600);
             
             if (isset($data['Notification'])) {
                 $this->saveSetting('notify_email', $data['Notification']['email']);
@@ -213,6 +212,7 @@ class AliyunTrafficCheck
             'shutdown_mode' => $this->configCache['shutdown_mode'] ?? 'KeepCharging',
             'threshold_action' => $this->configCache['threshold_action'] ?? 'stop_and_notify',
             'keep_alive' => ($this->configCache['keep_alive'] ?? '0') === '1',
+            'api_interval' => (int)($this->configCache['api_interval'] ?? 600), 
             'Notification' => [
                 'email' => $this->configCache['notify_email'] ?? '',
                 'host' => $this->configCache['notify_host'] ?? '',
@@ -251,6 +251,33 @@ class AliyunTrafficCheck
         }
     }
 
+    public function refreshAccount($id)
+    {
+        if ($this->initError) return false;
+
+        $targetAccount = null;
+        foreach ($this->accountsCache as $acc) {
+            if ($acc['id'] == $id) {
+                $targetAccount = $acc;
+                break;
+            }
+        }
+
+        if (!$targetAccount) return false;
+
+        $currentTime = time();
+        $updateStmt = $this->db->prepare("UPDATE accounts SET traffic_used = ?, instance_status = ?, updated_at = ? WHERE id = ?");
+
+        $traffic = $this->getTrafficApi($targetAccount['access_key_id'], $targetAccount['access_key_secret']);
+        $status = $this->getInstanceStatusApi($targetAccount);
+
+        if ($traffic < 0) {
+            $traffic = $targetAccount['traffic_used']; 
+        }
+
+        return $updateStmt->execute([$traffic, $status, $currentTime, $id]);
+    }
+
     public function monitor()
     {
         if ($this->initError) return "Error: " . $this->initError;
@@ -263,37 +290,46 @@ class AliyunTrafficCheck
         $thresholdAction = $this->configCache['threshold_action'] ?? 'stop_and_notify';
         $keepAlive = ($this->configCache['keep_alive'] ?? '0') === '1';
         
+        $userInterval = (int)($this->configCache['api_interval'] ?? 600);
+        
         $updateStmt = $this->db->prepare("UPDATE accounts SET traffic_used = ?, instance_status = ?, updated_at = ? WHERE id = ?");
-        // 准备更新保活时间的SQL
         $updateKeepAliveStmt = $this->db->prepare("UPDATE accounts SET last_keep_alive_at = ? WHERE id = ?");
 
         foreach ($this->accountsCache as $account) {
             $logPrefix = "[{$account['access_key_id']}]";
             $actions = [];
             $forceRefresh = false;
+            $statusTransformed = false; 
 
-            // 1. 定时任务 (优先级最高)
+            // 1. 定时任务 (逻辑：触发 -> 强制刷新 -> 状态变更为过渡态)
             if ($account['schedule_enabled'] == 1) {
                 if ($account['start_time'] && $currentUserTime === $account['start_time']) {
                     $this->controlInstance($account, 'start');
                     $actions[] = "定时启动";
-                    $this->notifySchedule("启动", $account);
+                    $this->notifySchedule("定时启动", $account, "计划任务已触发，实例正在启动。");
                     $forceRefresh = true;
+                    $statusTransformed = true; 
                 }
                 if ($account['stop_time'] && $currentUserTime === $account['stop_time']) {
                     $this->controlInstance($account, 'stop', $shutdownMode);
                     $actions[] = "定时停止({$shutdownMode})";
-                    $this->notifySchedule("停止", $account);
+                    $this->notifySchedule("定时停止", $account, "计划任务已触发，实例已停止。");
                     $forceRefresh = true;
+                    $statusTransformed = true;
                 }
             }
 
-            // 2. 数据获取
+            // 2. 自适应心跳机制 (Smart Burst)
             $lastUpdate = $account['updated_at'] ?? 0;
             $cachedStatus = $account['instance_status'] ?? 'Unknown';
-            $shouldCheckApi = $forceRefresh || (($currentTime - $lastUpdate) > self::API_INTERVAL) || ($cachedStatus === 'Unknown');
             
-            // 关键逻辑：默认更新为当前时间，但如果失败则保持旧时间以便重试
+            // 核心闭环：只要状态是“中间态”或“未知”，就强制每60秒检查一次
+            // 即使阿里云 API 调用慢，只要返回的状态还是 Starting/Stopping，这里就会持续保持高频
+            $isTransientState = in_array($cachedStatus, ['Starting', 'Stopping', 'Pending', 'Unknown']);
+            $currentInterval = ($isTransientState || $statusTransformed) ? 60 : $userInterval;
+
+            $shouldCheckApi = $forceRefresh || (($currentTime - $lastUpdate) > $currentInterval);
+            
             $newUpdateTime = $currentTime;
 
             if ($shouldCheckApi) {
@@ -307,26 +343,26 @@ class AliyunTrafficCheck
 
                 if ($newTraffic < 0) {
                     $traffic = $account['traffic_used']; 
-                    $apiStatusLog = "流量API异常(保留旧值)";
-                    // 失败：不更新时间戳，促使下次尽快重试
+                    $apiStatusLog = "流量API异常(保留)";
                     $newUpdateTime = $lastUpdate;
                 } else {
                     $traffic = $newTraffic;
-                    $apiStatusLog = "已更新API数据";
+                    $apiStatusLog = "已更新";
                 }
                 
-                // 失败：如果不更新时间戳，促使下次尽快重试
                 if ($status === 'Unknown') {
                     $newUpdateTime = $lastUpdate;
-                    $apiStatusLog .= " [状态Unknown]";
+                    $apiStatusLog .= "(状态Unknown)";
+                } else {
+                    $apiStatusLog .= in_array($status, ['Starting', 'Stopping', 'Pending']) ? " [过渡态]" : " [稳定态]";
                 }
 
                 $updateStmt->execute([$traffic, $status, $newUpdateTime, $account['id']]);
             } else {
                 $traffic = $account['traffic_used'];
                 $status = $account['instance_status'];
-                $timeLeft = self::API_INTERVAL - ($currentTime - $lastUpdate);
-                $apiStatusLog = "缓存有效({$timeLeft}s)";
+                $timeLeft = $currentInterval - ($currentTime - $lastUpdate);
+                $apiStatusLog = "缓存({$timeLeft}s)";
             }
 
             $maxTraffic = $account['max_traffic'];
@@ -334,7 +370,7 @@ class AliyunTrafficCheck
             $trafficDesc = "流量:{$usagePercent}%";
             $isOverThreshold = $usagePercent >= $threshold;
 
-            // 3. 流量阈值检查
+            // 3. 流量熔断
             if ($isOverThreshold) {
                 $trafficDesc .= "[警告]";
                 if ($shouldCheckApi) {
@@ -342,7 +378,9 @@ class AliyunTrafficCheck
                         if ($status !== 'Stopped') {
                             $this->controlInstance($account, 'stop', $shutdownMode);
                             $actions[] = "超限关机";
-                            $status = 'Stopped';
+                            // 立即更新数据库为 Stopping，确保下一分钟依然高频检查
+                            $updateStmt->execute([$traffic, 'Stopping', $currentTime, $account['id']]);
+                            $status = 'Stopping';
                         }
                     } else {
                         $actions[] = "超限告警";
@@ -351,30 +389,34 @@ class AliyunTrafficCheck
                 }
             }
 
-            // 4. 实例保活逻辑 (带冷却时间)
+            // 4. 保活逻辑
             if ($keepAlive && $account['schedule_enabled'] == 1 && !$isOverThreshold) {
                 if ($this->isTimeInRange($currentUserTime, $account['start_time'], $account['stop_time'])) {
                     if ($status === 'Stopped') {
-                        // 检查冷却时间
                         $lastKeepAlive = $account['last_keep_alive_at'] ?? 0;
                         $timeSinceLast = $currentTime - $lastKeepAlive;
 
                         if ($timeSinceLast > self::KEEP_ALIVE_COOLDOWN) {
-                            // 执行保活
                             $this->controlInstance($account, 'start');
                             $actions[] = "保活启动";
-                            $status = 'Starting';
-                            $this->notifySchedule("保活启动", $account);
-                            
-                            // 立即更新保活时间戳
+                            $this->notifySchedule("保活启动", $account, "检测到实例在工作时段非预期关机，已尝试自动启动。");
                             $updateKeepAliveStmt->execute([$currentTime, $account['id']]);
+                            // 立即更新数据库为 Starting，确保下一分钟依然高频检查
+                            $updateStmt->execute([$traffic, 'Starting', $currentTime, $account['id']]);
+                            $status = 'Starting';
                         } else {
-                            // 处于冷却期，跳过
                             $cooldownLeft = ceil((self::KEEP_ALIVE_COOLDOWN - $timeSinceLast) / 60);
-                            $apiStatusLog .= " [保活冷却中: {$cooldownLeft}分]";
+                            $apiStatusLog .= " [保活冷却:{$cooldownLeft}m]";
                         }
                     }
                 }
+            }
+
+            // 补充逻辑：如果刚刚执行了定时任务，立即将数据库状态置为过渡态
+            if ($statusTransformed) {
+                $tempStatus = in_array("定时启动", $actions) ? 'Starting' : 'Stopping';
+                $updateStmt->execute([$traffic, $tempStatus, $currentTime, $account['id']]);
+                $apiStatusLog .= " -> 强制过渡态";
             }
 
             $actionLog = empty($actions) ? "无动作" : implode(", ", $actions);
@@ -386,12 +428,12 @@ class AliyunTrafficCheck
 
     public function getStatusForFrontend()
     {
-        if ($this->initError) {
-            return ['error' => $this->initError];
-        }
+        if ($this->initError) return ['error' => $this->initError];
 
         $data = [];
         $threshold = (int)($this->configCache['traffic_threshold'] ?? 95);
+        $userInterval = (int)($this->configCache['api_interval'] ?? 600);
+        
         $currentTime = time();
         $updateStmt = $this->db->prepare("UPDATE accounts SET traffic_used = ?, instance_status = ?, updated_at = ? WHERE id = ?");
 
@@ -400,7 +442,11 @@ class AliyunTrafficCheck
             $cachedStatus = $account['instance_status'] ?? 'Unknown';
             $newUpdateTime = $currentTime;
 
-            if (($currentTime - $lastUpdate) > self::API_INTERVAL || $cachedStatus === 'Unknown') {
+            // 前端自适应：如果数据库记录的是中间态，说明正在变动中，前端超时时间也缩短为60秒
+            $isTransientState = in_array($cachedStatus, ['Starting', 'Stopping', 'Pending', 'Unknown']);
+            $checkInterval = $isTransientState ? 60 : $userInterval;
+
+            if (($currentTime - $lastUpdate) > $checkInterval) {
                 $newTraffic = $this->getTrafficApi($account['access_key_id'], $account['access_key_secret']);
                 $status = $this->getInstanceStatusApi($account);
                 
@@ -411,13 +457,13 @@ class AliyunTrafficCheck
 
                 if ($newTraffic < 0) {
                     $traffic = $account['traffic_used']; 
-                    $newUpdateTime = $lastUpdate; // 失败则不更新时间
+                    $newUpdateTime = $lastUpdate;
                 } else {
                     $traffic = $newTraffic;
                 }
                 
                 if ($status === 'Unknown') {
-                    $newUpdateTime = $lastUpdate; // 失败则不更新时间
+                    $newUpdateTime = $lastUpdate;
                 }
 
                 $updateStmt->execute([$traffic, $status, $newUpdateTime, $account['id']]);
@@ -430,6 +476,7 @@ class AliyunTrafficCheck
             $isFull = $usagePercent >= $threshold;
 
             $data[] = [
+                'id' => $account['id'], 
                 'account' => substr($account['access_key_id'], 0, 7) . '***',
                 'flow_total' => (float)$account['max_traffic'],
                 'flow_used' => round($traffic, 2),
@@ -454,9 +501,7 @@ class AliyunTrafficCheck
                 return array_sum(array_column($result['TrafficDetails'], 'Traffic')) / (1024 * 1024 * 1024);
             }
             return -1;
-        } catch (Exception $e) { 
-            return -1; 
-        }
+        } catch (Exception $e) { return -1; }
     }
 
     private function getInstanceStatusApi($account) {
@@ -481,24 +526,86 @@ class AliyunTrafficCheck
         } catch (Exception $e) {}
     }
     
-    private function notifySchedule($actionType, $account)
+    // ... (邮件部分代码保持不变，为节省篇幅省略) ...
+    // 请确保文件包含完整的 renderEmailTemplate, send_mail 等方法
+    private function notifySchedule($actionType, $account, $description = "")
     {
         if (($this->configCache['enable_schedule_email'] ?? '0') !== '1') return;
-        $msg = "账号 {$account['access_key_id']} 执行定时任务: {$actionType}";
-        $this->send_mail($this->configCache['notify_email'], '', 'CDT定时任务通知', $msg);
+        $title = "定时任务: " . $actionType;
+        $maskedKey = substr($account['access_key_id'], 0, 7) . '***';
+        $details = [
+            ['label' => '账号 ID', 'value' => $maskedKey],
+            ['label' => '执行动作', 'value' => $actionType, 'highlight' => true],
+            ['label' => '执行时间', 'value' => date('Y-m-d H:i:s')],
+            ['label' => '详情说明', 'value' => $description ?: '根据预设时间表自动执行。']
+        ];
+        $html = $this->renderEmailTemplate($title, "您的实例已执行{$actionType}操作", $details, 'info');
+        $this->send_mail($this->configCache['notify_email'], '', "CDT通知 - {$actionType}", $html);
     }
 
     private function sendNotification($accessKeyId, $traffic, $percentage, $statusText)
     {
         if (empty($this->configCache['notify_email'])) return;
         $threshold = $this->configCache['traffic_threshold'] ?? 95;
-        $message = "账号: {$accessKeyId}<br>流量: {$traffic}GB<br>使用率: {$percentage}% (阈值: {$threshold}%)<br>状态: <b>{$statusText}</b>";
-        $this->send_mail($this->configCache['notify_email'], '', 'CDT流量告警', $message);
+        $title = "流量告警 - " . $statusText;
+        $details = [
+            ['label' => '账号 ID', 'value' => substr($accessKeyId, 0, 7) . '***'],
+            ['label' => '当前流量', 'value' => $traffic . ' GB'],
+            ['label' => '使用率', 'value' => $percentage . '%', 'highlight' => true],
+            ['label' => '设定阈值', 'value' => $threshold . '%'],
+            ['label' => '当前状态', 'value' => $statusText]
+        ];
+        $html = $this->renderEmailTemplate($title, "检测到流量异常或达到阈值", $details, 'warning');
+        $this->send_mail($this->configCache['notify_email'], '', 'CDT流量熔断告警', $html);
     }
 
     public function sendTestEmail($to)
     {
-        return $this->send_mail($to, 'Admin', 'CDT Monitor Test', '<h1>测试邮件</h1><p>配置正确。</p>');
+        $details = [
+            ['label' => '测试结果', 'value' => '成功 (Success)'],
+            ['label' => '发送时间', 'value' => date('Y-m-d H:i:s')],
+            ['label' => '服务器', 'value' => $_SERVER['SERVER_NAME'] ?? 'localhost']
+        ];
+        $html = $this->renderEmailTemplate("测试邮件", "SMTP 配置验证成功", $details, 'success');
+        return $this->send_mail($to, 'Admin', 'CDT Monitor Test', $html);
+    }
+
+    private function renderEmailTemplate($title, $summary, $details, $type = 'info')
+    {
+        $color = '#007AFF'; 
+        if ($type === 'warning') $color = '#FF3B30'; 
+        if ($type === 'success') $color = '#34C759'; 
+
+        $rows = '';
+        foreach ($details as $item) {
+            $valColor = isset($item['highlight']) && $item['highlight'] ? $color : '#1C1C1E';
+            $rows .= "
+            <tr style='border-bottom: 1px solid #F2F2F7;'>
+                <td style='padding: 12px 0; color: #8E8E93; font-size: 14px; width: 40%;'>{$item['label']}</td>
+                <td style='padding: 12px 0; color: {$valColor}; font-size: 14px; font-weight: 600; text-align: right;'>{$item['value']}</td>
+            </tr>";
+        }
+
+        return "
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset='utf-8'></head>
+        <body style='margin: 0; padding: 0; background-color: #F2F2F7; font-family: sans-serif;'>
+            <table width='100%' border='0' cellspacing='0' cellpadding='0'>
+                <tr><td align='center' style='padding: 40px 20px;'>
+                    <table width='100%' border='0' cellspacing='0' cellpadding='0' style='max-width: 500px; background-color: #FFFFFF; border-radius: 24px; overflow: hidden;'>
+                        <tr><td style='height: 6px; background-color: {$color};'></td></tr>
+                        <tr><td style='padding: 40px 30px;'>
+                            <div style='color: {$color}; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px;'>CDT MONITOR</div>
+                            <h1 style='margin: 0 0 10px 0; font-size: 24px; color: #1C1C1E;'>{$title}</h1>
+                            <p style='margin: 0 0 30px 0; font-size: 15px; color: #8E8E93;'>{$summary}</p>
+                            <table width='100%' border='0' cellspacing='0' cellpadding='0' style='border-top: 1px solid #F2F2F7;'>{$rows}</table>
+                        </td></tr>
+                        <tr><td style='background-color: #FAFAFC; padding: 20px; text-align: center; color: #AEAEB2; font-size: 12px;'>&copy; " . date('Y') . " CDT Monitor</td></tr>
+                    </table>
+                </td></tr>
+            </table>
+        </body></html>";
     }
 
     private function send_mail($to, $name, $subject, $body)
