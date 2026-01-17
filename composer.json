@@ -1,0 +1,12 @@
+{
+    "require": {
+        "alibabacloud/client": "^1.5",
+        "phpmailer/phpmailer": "^6.9"
+    },
+    "repositories": {
+        "packagist": {
+            "type": "composer",
+            "url": "https://mirrors.aliyun.com/composer/"
+        }
+    }
+}
