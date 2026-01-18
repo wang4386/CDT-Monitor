@@ -1,8 +1,0 @@
-.git
-.gitignore
-vendor
-data
-docker-compose.yml
-Dockerfile
-README.MD
-LICENSE
