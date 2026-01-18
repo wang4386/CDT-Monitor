@@ -12,8 +12,17 @@
 
 ## 📸 界面预览 (Interface Preview)
 
-> *（此处建议展示首页仪表盘及设置页面的截图）*
+| 登陆界面 | 初始化 |
+| --- | --- |
+| ![https://assets.qninq.cn/qning/tzONAKQq.webp](https://assets.qninq.cn/qning/tzONAKQq.webp) | ![https://assets.qninq.cn/qning/xDFaQTTX.webp](https://assets.qninq.cn/qning/xDFaQTTX.webp) |
 
+| 后台页面 | 后台页面 |
+| --- | --- |
+| ![https://assets.qninq.cn/qning/WQG9I8qC.webp](https://assets.qninq.cn/qning/WQG9I8qC.webp) | ![https://assets.qninq.cn/qning/ipOStKeK.webp](https://assets.qninq.cn/qning/ipOStKeK.webp) |
+
+| 图表展示 | 邮件展示 |
+| --- | --- |
+| ![https://assets.qninq.cn/qning/a5zqmuJQ.webp](https://assets.qninq.cn/qning/a5zqmuJQ.webp) | ![https://assets.qninq.cn/qning/6KEjK7bw.webp](https://assets.qninq.cn/qning/6KEjK7bw.webp) |
 ## ✨ 核心功能 (Core Features)
 
 * **便捷部署架构** ：基于 SQLite 构建，无需配置 MySQL 或 Redis 等外部数据库，支持数据私有化存储与快速部署。
@@ -24,7 +33,7 @@
   * **告警通知** ：集成 SMTP 协议，支持通过邮件发送即时告警通知。
 * **实例保活策略** ：内置保活逻辑算法，旨在防止抢占式实例在预定运行时间段内被异常回收。
 * **定时任务管理** ：支持针对特定实例设定每日自动开关机计划。
-* **现代化用户界面** ：采用原生 Tailwind CSS 构建，提供响应式布局，确保移动端与桌面端的兼容性与视觉一致性。
+* **现代化用户界面** ：采用原生 Tailwind CSS 构建，提供统一的响应式布局，确保移动端与桌面端的兼容性与视觉一致性。
 * **安全保障体系** ：内置初始化配置向导，确保敏感配置信息的本地加密存储与安全性。
 
 ## 🛠️ 环境要求 (System Requirements)
@@ -39,7 +48,7 @@
 ### 1. 获取源代码
 
 ```
-git clone https://github.com/wang4386/CDT-Monitor.git
+git clone [https://github.com/wang4386/CDT-Monitor.git](https://github.com/wang4386/CDT-Monitor.git)
 cd CDT-Monitor
 ```
 
@@ -59,11 +68,70 @@ chown -R www:www /www/wwwroot/yoursite.com
 chmod -R 755 /www/wwwroot/yoursite.com
 ```
 
+> **🛡️ Nginx 安全配置（重要）**
+> 
+> 为防止数据库文件被下载，请务必在 Nginx 配置文件（server 段）中添加以下伪静态规则以禁止访问 `/data/` 目录：
+> 
+> ```
+> location ^~ /data/ {
+>     deny all;
+>     return 403;
+> }
+> ```
+
 ### 4. 系统初始化
 
 通过浏览器访问站点（例如 `https://monitor.yourdomain.com`）。首次访问将自动进入  **初始化向导** ，请按照提示完成管理员密码及相关参数的配置。
 
+## 🐳 Docker 部署 (Docker Deployment)
+
+无需配置 PHP 环境，直接使用 Docker 即可快速部署。Docker 版本已内置定时任务，**无需** 额外配置 Crontab。
+
+### 方式一：Docker Compose (推荐)
+
+创建一个 `docker-compose.yml` 文件：
+
+```
+services:
+  cdt-monitor:
+    image: qninq/cdt-monitor:latest
+    # build: .
+    container_name: cdt-monitor
+    restart: always
+    ports:
+      - "43210:80"  # 将容器的 80 端口映射到宿主机的 43210 端口
+    volumes:
+      # 持久化数据目录，确保重启后配置和数据库不丢失
+      - ./data:/var/www/html/data
+      # 可选：如果你想查看 Docker 内部的日志
+      # - ./logs:/var/log/nginx
+    environment:
+      - TZ=Asia/Shanghai  # 设置时区，对 Cron 任务很重要
+```
+
+启动服务：
+
+```
+docker-compose up -d
+```
+
+### 方式二：Docker CLI
+
+```
+docker run -d \
+    --name cdt-monitor \
+    --restart always \
+    -p 43210:80 \
+    -v $(pwd)/data:/var/www/html/data \
+    -e TZ=Asia/Shanghai \
+    qninq/cdt-monitor:latest
+```
+
+部署完成后，访问 `http://服务器IP:43210` 即可开始使用。
+
 ## ⚙️ 自动化任务配置 (Automation Setup)
+
+> **注意：** 如果您使用 Docker 部署，请跳过此步骤（容器已内置自动任务）。
 
 CDT-Monitor 依赖定时任务以实现精确的流量监控与实例保活功能。建议执行频率为 **每分钟一次** 。
 
