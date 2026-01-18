@@ -184,6 +184,6 @@ https://您的域名/monitor.php?key=您的管理员密码
 
 ## 📄 开源协议 (License)
 
-本项目遵循 [MIT License](https://www.google.com/search?q=LICENSE "null") 开源协议。
+本项目遵循 [MIT License](https://mit-license.org/ "null") 开源协议。
 
 <p align="center">Created by <a href="https://qninq.cn/">青柠·倾城于你</a></p>
