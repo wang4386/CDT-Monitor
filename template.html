@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>阿里云 CDT 监控控制台</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -122,7 +123,15 @@
         <div v-for="(item, index) in statusData" :key="index" 
              class="glass-panel rounded-[32px] p-6 flex flex-col justify-between relative overflow-hidden group hover:shadow-2xl transition-all duration-500">
             <div class="absolute top-0 right-0 p-6 opacity-50 flex gap-2">
-                <!-- 刷新按钮 (仅登录后可见) -->
+                <!-- 图表按钮 (新增) -->
+                <button v-if="isAdmin" @click="openChart(item.id, item.account)"
+                        class="p-1 rounded-full hover:bg-white/50 text-gray-400 hover:text-blue-500 transition-colors mr-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                    </svg>
+                </button>
+                
+                <!-- 刷新按钮 -->
                 <button v-if="isAdmin" @click="refreshSingle(item.id, index)" 
                         class="p-1 rounded-full hover:bg-white/50 text-gray-400 hover:text-gray-600 transition-colors"
                         :class="{'animate-spin': refreshingMap[index]}" 
@@ -175,6 +184,36 @@
     
     <div v-if="initialized && loading && !criticalError" class="w-full h-64 flex items-center justify-center">
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800"></div>
+    </div>
+
+    <!-- Chart Modal (New) -->
+    <div v-if="showChartModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-gray-200/30 backdrop-blur-md" @click="closeChart"></div>
+        <div class="glass-panel w-full max-w-4xl p-6 rounded-[40px] relative z-10 shadow-2xl bg-white/90">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h3 class="text-xl font-bold text-[#1C1C1E]">流量趋势</h3>
+                    <p class="text-xs text-gray-400 font-mono mt-1">{{ currentChartAccount }}</p>
+                </div>
+                <div class="flex bg-gray-100 rounded-lg p-1">
+                    <button @click="switchChartMode('30d')" 
+                            class="px-3 py-1 text-xs font-medium rounded-md transition-all"
+                            :class="chartMode === '30d' ? 'bg-white shadow text-black' : 'text-gray-500'">30天</button>
+                    <button @click="switchChartMode('24h')" 
+                            class="px-3 py-1 text-xs font-medium rounded-md transition-all"
+                            :class="chartMode === '24h' ? 'bg-white shadow text-black' : 'text-gray-500'">24小时</button>
+                </div>
+            </div>
+            
+            <div v-if="chartLoading" class="h-80 flex items-center justify-center">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800"></div>
+            </div>
+            <div v-show="!chartLoading" id="echarts-container" class="w-full h-80"></div>
+            
+            <div class="mt-4 text-center">
+                 <button @click="closeChart" class="text-sm text-gray-500 hover:text-gray-800 transition">关闭</button>
+            </div>
+        </div>
     </div>
 
     <!-- Critical Error Modal -->
@@ -539,7 +578,16 @@
             const regionSearchFocus = ref(-1); 
             const refreshingMap = ref({});
             const systemLogs = ref([]); 
-            const cronWarning = ref(false); // 新增：心跳异常警告
+            const cronWarning = ref(false); 
+
+            // 图表相关
+            const showChartModal = ref(false);
+            const chartLoading = ref(false);
+            const chartMode = ref('30d');
+            const currentChartId = ref(0);
+            const currentChartAccount = ref('');
+            let chartInstance = null;
+            let currentChartData = {}; // 缓存当前请求的图表数据
 
             // 阿里云地域数据 (...省略...)
             const aliyunRegions = [
@@ -701,6 +749,121 @@
                 }
             };
 
+            // 图表功能
+            const openChart = async (id, accountName) => {
+                showChartModal.value = true;
+                chartLoading.value = true;
+                currentChartId.value = id;
+                currentChartAccount.value = accountName;
+                chartMode.value = '30d'; // 默认显示30天
+
+                try {
+                    const res = await fetch(`index.php?action=get_history&id=${id}`);
+                    const json = await res.json();
+                    currentChartData = json.data || {};
+                    
+                    // 等待 DOM 渲染后初始化图表
+                    setTimeout(() => {
+                        initChart();
+                        renderChart();
+                        chartLoading.value = false;
+                    }, 100);
+                    
+                } catch(e) {
+                    console.error('Fetch history failed', e);
+                    chartLoading.value = false;
+                }
+            };
+
+            const initChart = () => {
+                const dom = document.getElementById('echarts-container');
+                if (chartInstance) {
+                    chartInstance.dispose();
+                }
+                chartInstance = echarts.init(dom);
+                window.addEventListener('resize', () => chartInstance && chartInstance.resize());
+            };
+
+            const switchChartMode = (mode) => {
+                chartMode.value = mode;
+                renderChart();
+            };
+
+            const renderChart = () => {
+                if (!chartInstance) return;
+
+                let xData = [];
+                let sData = [];
+                let is30d = chartMode.value === '30d';
+
+                if (is30d && currentChartData.history_30d) {
+                    xData = currentChartData.history_30d.map(i => i.date);
+                    sData = currentChartData.history_30d.map(i => i.value);
+                } else if (!is30d && currentChartData.history_24h) {
+                    xData = currentChartData.history_24h.map(i => i.time);
+                    sData = currentChartData.history_24h.map(i => i.value);
+                }
+
+                // ECharts 配置
+                const option = {
+                    tooltip: {
+                        trigger: 'axis',
+                        formatter: '{b} <br/> 流量: {c} GB'
+                    },
+                    grid: {
+                        left: '3%', right: '4%', bottom: '3%', top: '10%',
+                        containLabel: true
+                    },
+                    xAxis: {
+                        type: 'category',
+                        boundaryGap: is30d, // 30天用柱状图，留间隙；24h用折线图，不留
+                        data: xData,
+                        axisLine: { lineStyle: { color: '#ccc' } },
+                        axisLabel: { color: '#666' }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        name: 'GB',
+                        splitLine: { lineStyle: { type: 'dashed', color: '#eee' } }
+                    },
+                    series: [{
+                        data: sData,
+                        type: is30d ? 'bar' : 'line',
+                        smooth: true,
+                        itemStyle: { color: is30d ? '#1C1C1E' : '#007AFF' },
+                        areaStyle: is30d ? null : {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(0,122,255,0.3)' },
+                                { offset: 1, color: 'rgba(0,122,255,0.01)' }
+                            ])
+                        },
+                        showSymbol: false
+                    }]
+                };
+
+                // 如果是30天，增加折线趋势辅助
+                if (is30d) {
+                     option.series.push({
+                        data: sData,
+                        type: 'line',
+                        smooth: true,
+                        lineStyle: { color: '#FF3B30', width: 2, type: 'dashed' },
+                        itemStyle: { opacity: 0 }, // 隐藏点
+                        tooltip: { show: false } // 不重复显示tooltip
+                     });
+                }
+
+                chartInstance.setOption(option);
+            };
+
+            const closeChart = () => {
+                showChartModal.value = false;
+                if(chartInstance) {
+                    chartInstance.dispose();
+                    chartInstance = null;
+                }
+            };
+
             const toggleAdmin = () => {
                 if (isAdmin.value) {
                     fetch('index.php?action=logout').then(() => {
@@ -800,6 +963,7 @@
             return {
                 statusData, loading, isAdmin, checkingLogin, showLoginModal, passwordInput, config, initialized, loadingCheckInit, setupData, criticalError,
                 regionSearchFocus, aliyunRegions, refreshingMap, systemLogs, cronWarning,
+                showChartModal, chartLoading, chartMode, currentChartAccount, openChart, closeChart, switchChartMode,
                 toggleAdmin, performLogin, saveConfig, sendTestEmail, sendingEmail, addAccount, removeAccount, getInstanceStatusColor, performSetup, refreshSingle, fetchLogs
             };
         }

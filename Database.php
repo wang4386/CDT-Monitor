@@ -95,12 +95,22 @@ class Database
 
         $this->pdo->exec("CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, message TEXT, created_at INTEGER)");
 
-        // 新增：登录尝试记录表
         $this->pdo->exec("CREATE TABLE IF NOT EXISTS login_attempts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ip TEXT,
             attempt_time INTEGER
         )");
+
+        // 新增：流量历史记录表
+        // 注意：这里使用 access_key_id 作为关联键，因为 id 会因为 reorderIds 而改变
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS traffic_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            access_key_id TEXT,
+            traffic REAL,
+            recorded_at INTEGER
+        )");
+        // 为 access_key_id 和 recorded_at 创建索引，加速查询
+        $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_traffic_ak_time ON traffic_history (access_key_id, recorded_at)");
 
         $this->ensureColumn('accounts', 'traffic_used', 'REAL DEFAULT 0');
         $this->ensureColumn('accounts', 'instance_status', "TEXT DEFAULT 'Unknown'");
@@ -160,5 +170,31 @@ class Database
     {
         $stmt = $this->pdo->prepare("DELETE FROM login_attempts WHERE ip = ?");
         $stmt->execute([$ip]);
+    }
+
+    // --- 流量历史记录相关方法 ---
+
+    public function addTrafficHistory($accessKeyId, $traffic)
+    {
+        // 简单策略：直接插入。查询时再进行聚合。
+        // 为了避免数据量过大，可以在插入前判断：如果最近 5 分钟内已有记录且流量未变，则跳过？
+        // 这里为了图表平滑，我们选择全部记录（由 monitor 调用频率决定，通常每1-10分钟一次）
+        $stmt = $this->pdo->prepare("INSERT INTO traffic_history (access_key_id, traffic, recorded_at) VALUES (?, ?, ?)");
+        $stmt->execute([$accessKeyId, $traffic, time()]);
+    }
+
+    public function getTrafficHistory($accessKeyId, $startTime)
+    {
+        $stmt = $this->pdo->prepare("SELECT traffic, recorded_at FROM traffic_history WHERE access_key_id = ? AND recorded_at >= ? ORDER BY recorded_at ASC");
+        $stmt->execute([$accessKeyId, $startTime]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    public function pruneTrafficHistory($days = 31)
+    {
+        // 清理超过指定天数的历史记录
+        $timestamp = time() - ($days * 86400);
+        $stmt = $this->pdo->prepare("DELETE FROM traffic_history WHERE recorded_at < ?");
+        $stmt->execute([$timestamp]);
     }
 }

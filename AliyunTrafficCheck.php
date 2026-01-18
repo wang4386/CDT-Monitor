@@ -51,21 +51,14 @@ class AliyunTrafficCheck
         return $this->configManager->get('admin_password', '');
     }
 
-    /**
-     * 安全登录验证
-     * 包含防暴力破解限制 (15分钟内最多5次错误)
-     */
     public function login($password)
     {
-        // 获取客户端 IP
         $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
-        // 如果使用了反向代理 (如 Nginx/Cloudflare)，请确保正确配置 Real IP，否则这里可能获取到 127.0.0.1
         if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
             $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
             $ip = trim($ips[0]);
         }
 
-        // 1. 检查频率限制 (15分钟内 5次)
         $attempts = $this->db->getRecentFailedAttempts($ip, 900);
         if ($attempts >= 5) {
             $this->db->addLog('warning', "登录被锁定: IP {$ip} 尝试次数过多");
@@ -75,16 +68,12 @@ class AliyunTrafficCheck
         $adminPass = $this->getAdminPassword();
         if (empty($adminPass)) return false;
 
-        // 2. 验证密码 (使用 hash_equals 防止计时攻击)
-        // 注意：此处仍比较明文，若需更高安全应升级存储为 Hash
         if (hash_equals((string)$adminPass, (string)$password)) {
-            // 登录成功，清除失败记录
             $this->db->clearLoginAttempts($ip);
             $this->db->addLog('info', "管理员登录成功 [IP: {$ip}]");
             return true;
         }
 
-        // 3. 登录失败，记录尝试
         $this->db->recordLoginAttempt($ip);
         $this->db->addLog('warning', "管理员登录失败 [IP: {$ip}]");
         return false;
@@ -160,13 +149,71 @@ class AliyunTrafficCheck
         return $logs;
     }
 
+    // --- 新增：获取流量历史数据 ---
+    public function getAccountHistory($id)
+    {
+        if ($this->initError) return [];
+        
+        // 1. 通过 ID 查找账号，获取 AccessKeyId
+        $account = $this->configManager->getAccountById($id);
+        if (!$account) return ['error' => 'Account not found'];
+
+        $ak = $account['access_key_id'];
+
+        // 2. 获取过去 30 天的数据
+        $startTime = time() - (30 * 86400);
+        $rawHistory = $this->db->getTrafficHistory($ak, $startTime);
+
+        // 3. 处理数据
+        $chart24h = [];
+        $chart30d = [];
+        
+        $last24hTime = time() - (24 * 3600);
+        
+        // 用于30天聚合 (key: Y-m-d, value: max_traffic)
+        $dailyData = []; 
+
+        foreach ($rawHistory as $row) {
+            $time = $row['recorded_at'];
+            $traffic = round($row['traffic'], 3);
+            
+            // 24小时数据：直接添加所有点（或者稍微抽样，ECharts处理几千个点没问题）
+            if ($time >= $last24hTime) {
+                $chart24h[] = [
+                    'time' => date('H:i', $time), 
+                    'full_time' => date('Y-m-d H:i', $time),
+                    'value' => $traffic
+                ];
+            }
+
+            // 30天数据：按天聚合取最大值（因为CDT流量是累积的，每天的最大值即为当天最终使用量）
+            $day = date('Y-m-d', $time);
+            if (!isset($dailyData[$day])) {
+                $dailyData[$day] = $traffic;
+            } else {
+                $dailyData[$day] = max($dailyData[$day], $traffic);
+            }
+        }
+
+        // 格式化 30 天数据
+        foreach ($dailyData as $date => $val) {
+            $chart30d[] = ['date' => $date, 'value' => $val];
+        }
+
+        return [
+            'history_24h' => $chart24h,
+            'history_30d' => $chart30d
+        ];
+    }
+
     // --- 核心监控逻辑 ---
 
     public function monitor()
     {
         if ($this->initError) return "Error: " . $this->initError;
         
-        $this->db->pruneLogs(30); 
+        $this->db->pruneLogs(30);
+        $this->db->pruneTrafficHistory(31); // 自动清理超过31天的历史数据
 
         $logs = [];
         $currentUserTime = date('H:i');
@@ -224,6 +271,7 @@ class AliyunTrafficCheck
             $newUpdateTime = $currentTime;
 
             if ($shouldCheckApi) {
+                // 使用 Safe 方法
                 $newTraffic = $this->safeGetTraffic($account);
                 $status = $this->safeGetInstanceStatus($account);
                 
@@ -239,6 +287,9 @@ class AliyunTrafficCheck
                 } else {
                     $traffic = $newTraffic;
                     $apiStatusLog = "已更新";
+                    
+                    // [新增] 成功获取流量后，记录历史数据 (绑定到 AccessKeyId)
+                    $this->db->addTrafficHistory($account['access_key_id'], $traffic);
                 }
                 
                 if ($status === 'Unknown') {
@@ -346,6 +397,7 @@ class AliyunTrafficCheck
             $checkInterval = $isTransientState ? 60 : $userInterval;
 
             if (($currentTime - $lastUpdate) > $checkInterval) {
+                // 使用 Safe 方法
                 $newTraffic = $this->safeGetTraffic($account);
                 $status = $this->safeGetInstanceStatus($account);
                 
@@ -359,6 +411,8 @@ class AliyunTrafficCheck
                     $newUpdateTime = $lastUpdate;
                 } else {
                     $traffic = $newTraffic;
+                    // [新增] 只有在真正调用API更新了数据时，才记录历史
+                    $this->db->addTrafficHistory($account['access_key_id'], $traffic);
                 }
                 
                 if ($status === 'Unknown') {
@@ -408,6 +462,9 @@ class AliyunTrafficCheck
 
         if ($traffic < 0) {
             $traffic = $targetAccount['traffic_used']; 
+        } else {
+            // [新增] 手动刷新也记录历史
+            $this->db->addTrafficHistory($targetAccount['access_key_id'], $traffic);
         }
 
         return $this->configManager->updateAccountStatus($id, $traffic, $status, $currentTime);
@@ -454,11 +511,9 @@ class AliyunTrafficCheck
             return $this->aliyunService->getInstanceStatus($account);
         } catch (\Exception $e) {
             if (strpos($e->getMessage(), 'cURL error') !== false) {
-                 // 网络超时，不记录，以免刷屏日志，仅返回 Unknown
             } elseif ($e instanceof ClientException) {
                 $this->db->addLog('error', "实例状态查询配置错误: 鉴权失败");
             } else {
-                // 其他错误也不记录详细堆栈
             }
             return 'Unknown';
         }

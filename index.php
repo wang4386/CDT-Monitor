@@ -56,7 +56,6 @@ if ($action === 'login') {
             echo json_encode(['success' => false, 'message' => '密码错误']);
         }
     } catch (Exception $e) {
-        // 捕获频率限制异常
         echo json_encode(['success' => false, 'message' => $e->getMessage()]);
     }
     exit;
@@ -119,10 +118,18 @@ if ($action === 'refresh_account') {
     exit;
 }
 
-// 新增：获取系统日志
+// 获取系统日志
 if ($action === 'get_logs') {
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['data' => $app->getSystemLogs()]);
+    exit;
+}
+
+// 新增：获取流量历史
+if ($action === 'get_history') {
+    header('Content-Type: application/json; charset=utf-8');
+    $id = $_GET['id'] ?? 0;
+    echo json_encode(['data' => $app->getAccountHistory($id)]);
     exit;
 }
 

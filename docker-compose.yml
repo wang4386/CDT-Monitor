@@ -1,0 +1,16 @@
+services:
+  cdt-monitor:
+    build: .
+    container_name: cdt-monitor
+    restart: always
+    ports:
+      - "43210:80"
+    volumes:
+      - ./data:/var/www/html/data
+    environment:
+      - TZ=Asia/Shanghai
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
