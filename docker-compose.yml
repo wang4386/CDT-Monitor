@@ -1,6 +1,7 @@
 services:
   cdt-monitor:
-    build: .
+    image: qninq/cdt-monitor:latest
+    # build: .
     container_name: cdt-monitor
     restart: always
     ports:
