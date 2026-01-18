@@ -11,9 +11,13 @@ class NotificationService
         $this->config = $config;
     }
 
+    /**
+     * 发送定时任务通知
+     * @return bool|string 成功返回 true，失败返回错误信息
+     */
     public function notifySchedule($actionType, $account, $description = "")
     {
-        if (($this->config['enable_schedule_email'] ?? '0') !== '1') return;
+        if (($this->config['enable_schedule_email'] ?? '0') !== '1') return true; // 未开启也视为“处理完毕”
         
         $title = "定时任务: " . $actionType;
         $maskedKey = substr($account['access_key_id'], 0, 7) . '***';
@@ -24,12 +28,16 @@ class NotificationService
             ['label' => '详情说明', 'value' => $description ?: '根据预设时间表自动执行。']
         ];
         $html = $this->renderEmailTemplate($title, "您的实例已执行{$actionType}操作", $details, 'info');
-        $this->sendMail($this->config['notify_email'] ?? '', '', "CDT通知 - {$actionType}", $html);
+        return $this->sendMail($this->config['notify_email'] ?? '', '', "CDT通知 - {$actionType}", $html);
     }
 
+    /**
+     * 发送流量告警
+     * @return bool|string
+     */
     public function sendTrafficWarning($accessKeyId, $traffic, $percentage, $statusText, $threshold)
     {
-        if (empty($this->config['notify_email'])) return;
+        if (empty($this->config['notify_email'])) return false;
         
         $title = "流量告警 - " . $statusText;
         $details = [
@@ -40,7 +48,7 @@ class NotificationService
             ['label' => '当前状态', 'value' => $statusText]
         ];
         $html = $this->renderEmailTemplate($title, "检测到流量异常或达到阈值", $details, 'warning');
-        $this->sendMail($this->config['notify_email'], '', 'CDT流量熔断告警', $html);
+        return $this->sendMail($this->config['notify_email'] ?? '', '', 'CDT流量熔断告警', $html);
     }
 
     public function sendTestEmail($to)
@@ -117,6 +125,12 @@ class NotificationService
         $mail->Subject = $subject;
         $mail->MsgHTML($body);
         $mail->AddAddress($to, $name);
-        return $mail->Send() ? true : $mail->ErrorInfo;
+        
+        // 修改：返回 true 或 错误信息字符串
+        if ($mail->Send()) {
+            return true;
+        } else {
+            return $mail->ErrorInfo;
+        }
     }
 }

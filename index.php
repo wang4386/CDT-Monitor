@@ -48,11 +48,16 @@ if ($action === 'setup') {
 
 if ($action === 'login') {
     $data = json_decode(file_get_contents('php://input'), true);
-    if ($app->login($data['password'] ?? '')) {
-        $_SESSION['is_admin'] = true;
-        echo json_encode(['success' => true]);
-    } else {
-        echo json_encode(['success' => false, 'message' => '密码错误']);
+    try {
+        if ($app->login($data['password'] ?? '')) {
+            $_SESSION['is_admin'] = true;
+            echo json_encode(['success' => true]);
+        } else {
+            echo json_encode(['success' => false, 'message' => '密码错误']);
+        }
+    } catch (Exception $e) {
+        // 捕获频率限制异常
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
     }
     exit;
 }

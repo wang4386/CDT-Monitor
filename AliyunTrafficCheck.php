@@ -51,11 +51,43 @@ class AliyunTrafficCheck
         return $this->configManager->get('admin_password', '');
     }
 
+    /**
+     * 安全登录验证
+     * 包含防暴力破解限制 (15分钟内最多5次错误)
+     */
     public function login($password)
     {
+        // 获取客户端 IP
+        $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+        // 如果使用了反向代理 (如 Nginx/Cloudflare)，请确保正确配置 Real IP，否则这里可能获取到 127.0.0.1
+        if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+            $ip = trim($ips[0]);
+        }
+
+        // 1. 检查频率限制 (15分钟内 5次)
+        $attempts = $this->db->getRecentFailedAttempts($ip, 900);
+        if ($attempts >= 5) {
+            $this->db->addLog('warning', "登录被锁定: IP {$ip} 尝试次数过多");
+            throw new Exception("错误次数过多，请 15 分钟后再试。");
+        }
+
         $adminPass = $this->getAdminPassword();
         if (empty($adminPass)) return false;
-        return (string)$password === (string)$adminPass;
+
+        // 2. 验证密码 (使用 hash_equals 防止计时攻击)
+        // 注意：此处仍比较明文，若需更高安全应升级存储为 Hash
+        if (hash_equals((string)$adminPass, (string)$password)) {
+            // 登录成功，清除失败记录
+            $this->db->clearLoginAttempts($ip);
+            $this->db->addLog('info', "管理员登录成功 [IP: {$ip}]");
+            return true;
+        }
+
+        // 3. 登录失败，记录尝试
+        $this->db->recordLoginAttempt($ip);
+        $this->db->addLog('warning', "管理员登录失败 [IP: {$ip}]");
+        return false;
     }
 
     public function setup($data)
@@ -134,7 +166,7 @@ class AliyunTrafficCheck
     {
         if ($this->initError) return "Error: " . $this->initError;
         
-        $this->db->pruneLogs(30); // 清理日志
+        $this->db->pruneLogs(30); 
 
         $logs = [];
         $currentUserTime = date('H:i');
@@ -159,8 +191,11 @@ class AliyunTrafficCheck
                 if ($account['start_time'] && $currentUserTime === $account['start_time']) {
                     if ($this->safeControlInstance($account, 'start')) {
                         $actions[] = "定时启动";
-                        $this->db->addLog('info', "账号 {$account['access_key_id']} 触发定时启动");
-                        $this->notificationService->notifySchedule("定时启动", $account, "计划任务已触发，实例正在启动。");
+                        $this->db->addLog('info', "执行定时启动 [{$account['access_key_id']}]");
+                        
+                        $mailRes = $this->notificationService->notifySchedule("定时启动", $account, "计划任务已触发，实例正在启动。");
+                        $this->logMailResult($mailRes, $account['access_key_id']);
+
                         $forceRefresh = true;
                         $statusTransformed = true; 
                     }
@@ -168,8 +203,11 @@ class AliyunTrafficCheck
                 if ($account['stop_time'] && $currentUserTime === $account['stop_time']) {
                     if ($this->safeControlInstance($account, 'stop', $shutdownMode)) {
                         $actions[] = "定时停止({$shutdownMode})";
-                        $this->db->addLog('info', "账号 {$account['access_key_id']} 触发定时停止 ({$shutdownMode})");
-                        $this->notificationService->notifySchedule("定时停止", $account, "计划任务已触发，实例已停止。");
+                        $this->db->addLog('info', "执行定时停止 [{$account['access_key_id']}]");
+                        
+                        $mailRes = $this->notificationService->notifySchedule("定时停止", $account, "计划任务已触发，实例已停止。");
+                        $this->logMailResult($mailRes, $account['access_key_id']);
+
                         $forceRefresh = true;
                         $statusTransformed = true;
                     }
@@ -186,11 +224,9 @@ class AliyunTrafficCheck
             $newUpdateTime = $currentTime;
 
             if ($shouldCheckApi) {
-                // 使用 Safe 方法
                 $newTraffic = $this->safeGetTraffic($account);
                 $status = $this->safeGetInstanceStatus($account);
                 
-                // 简单的重试逻辑交给 Safe 方法内部其实不太好做，这里保留上层重试逻辑
                 if ($status === 'Unknown') {
                     usleep(500000); 
                     $status = $this->safeGetInstanceStatus($account);
@@ -233,16 +269,18 @@ class AliyunTrafficCheck
                         if ($status !== 'Stopped') {
                             if ($this->safeControlInstance($account, 'stop', $shutdownMode)) {
                                 $actions[] = "超限关机";
-                                $this->db->addLog('warning', "账号 {$account['access_key_id']} 流量超限 ({$usagePercent}%)，触发自动关机");
+                                $this->db->addLog('warning', "流量超限自动关机 [{$account['access_key_id']}] 使用率:{$usagePercent}%");
                                 $this->configManager->updateAccountStatus($account['id'], $traffic, 'Stopping', $currentTime);
                                 $status = 'Stopping';
                             }
                         }
                     } else {
                         $actions[] = "超限告警";
-                        $this->db->addLog('warning', "账号 {$account['access_key_id']} 流量超限 ({$usagePercent}%)，仅发送告警");
+                        $this->db->addLog('warning', "流量超限触发告警 [{$account['access_key_id']}] 使用率:{$usagePercent}%");
                     }
-                    $this->notificationService->sendTrafficWarning($account['access_key_id'], $traffic, $usagePercent, implode(',', $actions), $threshold);
+                    
+                    $mailRes = $this->notificationService->sendTrafficWarning($account['access_key_id'], $traffic, $usagePercent, implode(',', $actions), $threshold);
+                    $this->logMailResult($mailRes, $account['access_key_id']);
                 }
             }
 
@@ -256,8 +294,11 @@ class AliyunTrafficCheck
                         if ($timeSinceLast > self::KEEP_ALIVE_COOLDOWN) {
                             if ($this->safeControlInstance($account, 'start')) {
                                 $actions[] = "保活启动";
-                                $this->db->addLog('info', "账号 {$account['access_key_id']} 触发保活启动");
-                                $this->notificationService->notifySchedule("保活启动", $account, "检测到实例在工作时段非预期关机，已尝试自动启动。");
+                                $this->db->addLog('info', "执行保活启动 [{$account['access_key_id']}]");
+                                
+                                $mailRes = $this->notificationService->notifySchedule("保活启动", $account, "检测到实例在工作时段非预期关机，已尝试自动启动。");
+                                $this->logMailResult($mailRes, $account['access_key_id']);
+
                                 $this->configManager->updateLastKeepAlive($account['id'], $currentTime);
                                 $this->configManager->updateAccountStatus($account['id'], $traffic, 'Starting', $currentTime);
                                 $status = 'Starting';
@@ -280,7 +321,6 @@ class AliyunTrafficCheck
             $logs[] = sprintf("%s %s | %s | %s | %s", $logPrefix, $actionLog, $trafficDesc, $status, $apiStatusLog);
         }
         
-        // --- 新增：更新心跳时间 ---
         $this->configManager->updateLastRunTime(time());
 
         return implode(PHP_EOL, $logs);
@@ -306,7 +346,6 @@ class AliyunTrafficCheck
             $checkInterval = $isTransientState ? 60 : $userInterval;
 
             if (($currentTime - $lastUpdate) > $checkInterval) {
-                // 使用 Safe 方法
                 $newTraffic = $this->safeGetTraffic($account);
                 $status = $this->safeGetInstanceStatus($account);
                 
@@ -350,7 +389,6 @@ class AliyunTrafficCheck
             ];
         }
         
-        // --- 新增：返回系统心跳时间 ---
         return [
             'data' => $data,
             'system_last_run' => $this->configManager->getLastRunTime()
@@ -365,7 +403,6 @@ class AliyunTrafficCheck
         if (!$targetAccount) return false;
 
         $currentTime = time();
-        // 使用 Safe 方法
         $traffic = $this->safeGetTraffic($targetAccount);
         $status = $this->safeGetInstanceStatus($targetAccount);
 
@@ -381,20 +418,32 @@ class AliyunTrafficCheck
         return $this->notificationService->sendTestEmail($to);
     }
 
-    // --- 异常处理封装 (Safe Methods) ---
+    private function logMailResult($result, $key)
+    {
+        if ($result === true) {
+            $this->db->addLog('info', "邮件发送成功 [$key]");
+        } elseif ($result !== false && $result !== true) {
+            $this->db->addLog('warning', "邮件发送失败 [$key]: " . strip_tags($result));
+        }
+    }
 
     private function safeGetTraffic($account)
     {
         try {
             return $this->aliyunService->getTraffic($account['access_key_id'], $account['access_key_secret']);
         } catch (ClientException $e) {
-            $this->db->addLog('error', "流量查询配置错误 [{$account['access_key_id']}]: " . $e->getErrorMessage());
+            $code = $e->getErrorCode();
+            $this->db->addLog('error', "流量查询配置错误: " . ($code ?: "鉴权失败"));
             return -1;
         } catch (ServerException $e) {
-            $this->db->addLog('error', "流量查询服务错误 [{$account['access_key_id']}]: " . $e->getErrorMessage());
+            $this->db->addLog('error', "流量查询失败: 阿里云接口超时");
             return -1;
         } catch (\Exception $e) {
-            $this->db->addLog('error', "流量查询未知异常 [{$account['access_key_id']}]: " . $e->getMessage());
+            if (strpos($e->getMessage(), 'cURL error') !== false) {
+                $this->db->addLog('error', "流量查询失败: 网络连接超时");
+            } else {
+                $this->db->addLog('error', "流量查询失败: 系统未知错误");
+            }
             return -1;
         }
     }
@@ -403,14 +452,14 @@ class AliyunTrafficCheck
     {
         try {
             return $this->aliyunService->getInstanceStatus($account);
-        } catch (ClientException $e) {
-            // 实例状态查询失败通常不应中断整个流程，记录日志并返回 Unknown
-            $this->db->addLog('error', "实例查询配置错误 [{$account['access_key_id']}]: " . $e->getErrorMessage());
-            return 'Unknown';
-        } catch (ServerException $e) {
-            $this->db->addLog('error', "实例查询服务错误 [{$account['access_key_id']}]: " . $e->getErrorMessage());
-            return 'Unknown';
         } catch (\Exception $e) {
+            if (strpos($e->getMessage(), 'cURL error') !== false) {
+                 // 网络超时，不记录，以免刷屏日志，仅返回 Unknown
+            } elseif ($e instanceof ClientException) {
+                $this->db->addLog('error', "实例状态查询配置错误: 鉴权失败");
+            } else {
+                // 其他错误也不记录详细堆栈
+            }
             return 'Unknown';
         }
     }
@@ -420,18 +469,16 @@ class AliyunTrafficCheck
         try {
             return $this->aliyunService->controlInstance($account, $action, $shutdownMode);
         } catch (ClientException $e) {
-            $this->db->addLog('error', "实例操作配置错误 [{$account['access_key_id']} - {$action}]: " . $e->getErrorMessage());
+            $this->db->addLog('error', "实例操作失败 [{$action}]: 权限不足或配置错误");
             return false;
         } catch (ServerException $e) {
-            $this->db->addLog('error', "实例操作服务错误 [{$account['access_key_id']} - {$action}]: " . $e->getErrorMessage());
+            $this->db->addLog('error', "实例操作失败 [{$action}]: 阿里云服务无响应");
             return false;
         } catch (\Exception $e) {
-            $this->db->addLog('error', "实例操作失败 [{$account['access_key_id']} - {$action}]: " . $e->getMessage());
+            $this->db->addLog('error', "实例操作失败 [{$action}]: 无法连接API");
             return false;
         }
     }
-
-    // --- 辅助方法 ---
 
     private function isTimeInRange($current, $start, $end) {
         if (!$start || !$end) return false;

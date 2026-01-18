@@ -7,27 +7,20 @@ class Database
 
     public function __construct($dbFile = null)
     {
-        // 变更 1: 默认路径修改为 /data/ 子目录
+        // 默认路径修改为 /data/ 子目录
         $this->dbFile = $dbFile ?: __DIR__ . '/data/data.sqlite';
         
-        // 变更 2: 在连接前执行环境安全检查与初始化
+        // 环境安全检查
         $this->secureEnvironment();
         
         $this->connect();
         $this->initSchema();
     }
 
-    /**
-     * 安全环境初始化
-     * 1. 创建独立数据目录
-     * 2. 自动迁移旧数据（如果存在）
-     * 3. 部署 .htaccess 防火墙
-     * 4. 部署防目录遍历空文件
-     */
     private function secureEnvironment()
     {
         $dir = dirname($this->dbFile);
-        $oldFile = __DIR__ . '/data.sqlite'; // 旧文件位置
+        $oldFile = __DIR__ . '/data.sqlite';
 
         // 1. 自动创建目录
         if (!is_dir($dir)) {
@@ -36,30 +29,27 @@ class Database
             }
         }
 
-        // 2. 自动迁移旧数据 (如果根目录有旧数据，且新目录没有数据)
+        // 2. 自动迁移旧数据
         if (file_exists($oldFile) && !file_exists($this->dbFile)) {
             if (!@rename($oldFile, $this->dbFile)) {
-                // 如果移动失败（通常是权限问题），尝试复制
                 if (@copy($oldFile, $this->dbFile)) {
-                    @unlink($oldFile); // 复制成功后尝试删除旧文件
+                    @unlink($oldFile);
                 } else {
-                    // 如果都失败了，抛出权限异常，提示用户手动移动
-                    throw new Exception("安全迁移失败：无法将旧数据库 ($oldFile) 移动到新目录 ($dir)。<br>请手动移动文件或检查目录权限。");
+                    throw new Exception("安全迁移失败：无法移动旧数据库。请检查目录权限。");
                 }
             }
         }
 
-        // 3. 部署 Apache/LiteSpeed 防火墙规则
+        // 3. 部署 .htaccess
         $htaccess = $dir . '/.htaccess';
         if (!file_exists($htaccess)) {
-            $content = "Order Deny,Allow\nDeny from all";
-            @file_put_contents($htaccess, $content);
+            @file_put_contents($htaccess, "Order Deny,Allow\nDeny from all");
         }
 
-        // 4. 部署防目录遍历诱饵
+        // 4. 部署 index.html
         $indexHtml = $dir . '/index.html';
         if (!file_exists($indexHtml)) {
-            @file_put_contents($indexHtml, ''); // 空文件即可
+            @file_put_contents($indexHtml, '');
         }
     }
 
@@ -80,16 +70,13 @@ class Database
     private function throwPermissionError($dir)
     {
         $user = get_current_user();
-        throw new Exception("权限不足：Web用户 ({$user}) 无法在目录 {$dir} 中读写文件。<br>请在服务器终端执行命令修复权限：<br><code>chown -R {$user}:{$user} " . __DIR__ . "</code>");
+        throw new Exception("权限不足：Web用户 ({$user}) 无法读写 {$dir}。<br>请修复权限：<code>chown -R {$user}:{$user} " . __DIR__ . "</code>");
     }
 
     private function initSchema()
     {
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )");
-
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)");
+        
         $this->pdo->exec("CREATE TABLE IF NOT EXISTS accounts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             access_key_id TEXT,
@@ -106,11 +93,13 @@ class Database
             last_keep_alive_at INTEGER DEFAULT 0
         )");
 
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS logs (
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, message TEXT, created_at INTEGER)");
+
+        // 新增：登录尝试记录表
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS login_attempts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            type TEXT,
-            message TEXT,
-            created_at INTEGER
+            ip TEXT,
+            attempt_time INTEGER
         )");
 
         $this->ensureColumn('accounts', 'traffic_used', 'REAL DEFAULT 0');
@@ -148,8 +137,28 @@ class Database
 
     public function pruneLogs($days = 30)
     {
-        $timestamp = time() - ($days * 86400);
         $stmt = $this->pdo->prepare("DELETE FROM logs WHERE created_at < ?");
-        $stmt->execute([$timestamp]);
+        $stmt->execute([time() - ($days * 86400)]);
+    }
+
+    // --- 登录频率限制相关方法 ---
+
+    public function recordLoginAttempt($ip)
+    {
+        $stmt = $this->pdo->prepare("INSERT INTO login_attempts (ip, attempt_time) VALUES (?, ?)");
+        $stmt->execute([$ip, time()]);
+    }
+
+    public function getRecentFailedAttempts($ip, $windowSeconds = 900)
+    {
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM login_attempts WHERE ip = ? AND attempt_time > ?");
+        $stmt->execute([$ip, time() - $windowSeconds]);
+        return (int)$stmt->fetchColumn();
+    }
+
+    public function clearLoginAttempts($ip)
+    {
+        $stmt = $this->pdo->prepare("DELETE FROM login_attempts WHERE ip = ?");
+        $stmt->execute([$ip]);
     }
 }
