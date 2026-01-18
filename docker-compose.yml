@@ -1,0 +1,14 @@
+services:
+  cdt-monitor:
+    build: .
+    container_name: cdt-monitor
+    restart: always
+    ports:
+      - "43210:80"  # 将容器的 80 端口映射到宿主机的 8080 端口
+    volumes:
+      # 持久化数据目录，确保重启后配置和数据库不丢失
+      - ./data:/var/www/html/data
+      # 可选：如果你想查看 Docker 内部的日志
+      # - ./logs:/var/log/nginx
+    environment:
+      - TZ=Asia/Shanghai  # 设置时区，对 Cron 任务很重要
