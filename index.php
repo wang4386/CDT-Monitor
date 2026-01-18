@@ -103,7 +103,6 @@ if ($action === 'send_test_email') {
     exit;
 }
 
-// 新增：手动刷新单个账号状态
 if ($action === 'refresh_account') {
     $data = json_decode(file_get_contents('php://input'), true);
     $id = $data['id'] ?? 0;
@@ -112,6 +111,13 @@ if ($action === 'refresh_account') {
     } else {
         echo json_encode(['success' => false, 'message' => 'Refresh failed']);
     }
+    exit;
+}
+
+// 新增：获取系统日志
+if ($action === 'get_logs') {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['data' => $app->getSystemLogs()]);
     exit;
 }
 

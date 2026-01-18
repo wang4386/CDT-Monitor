@@ -88,6 +88,23 @@
 
 <div id="app" v-cloak class="min-h-screen p-6 md:p-12 flex flex-col items-center">
     
+    <!-- 警告条 -->
+    <div v-if="cronWarning && initialized && !criticalError" class="w-full max-w-5xl mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-xl shadow-sm animate-fade-in">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div class="ml-3">
+                <p class="text-sm text-yellow-700">
+                    <span class="font-bold">监控心跳异常：</span>
+                    计划任务可能未运行，请检查 Crontab 设置 (超过 3 分钟无响应)。
+                </p>
+            </div>
+        </div>
+    </div>
+
     <header class="w-full max-w-5xl flex justify-between items-center mb-10 px-2">
         <div>
             <h1 class="text-2xl font-bold tracking-tight text-[#1C1C1E]">CDT Monitor</h1>
@@ -376,84 +393,124 @@
             </div>
 
             <!-- Right Column (Accounts) -->
-            <div class="lg:col-span-2 glass-panel rounded-[40px] p-8 h-fit z-0">
-                <div class="space-y-8">
-                    <div v-for="(acc, idx) in config.Accounts" :key="idx" class="p-6 bg-white/40 rounded-[28px] border border-white/60 relative hover:bg-white/60 transition-colors">
-                        <button @click="removeAccount(idx)" class="absolute top-4 right-4 text-xs text-red-500 font-bold hover:bg-red-50 p-2 rounded-lg transition">移除</button>
-                        
-                        <h3 class="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4">账号 {{ idx + 1 }}</h3>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div class="space-y-1">
-                                <label class="text-xs font-medium text-gray-500 ml-2">AccessKey ID</label>
-                                <input v-model="acc.AccessKeyId" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+            <div class="lg:col-span-2 space-y-8">
+                <div class="glass-panel rounded-[40px] p-8 h-fit z-0">
+                    <div class="space-y-8">
+                        <div v-for="(acc, idx) in config.Accounts" :key="idx" class="p-6 bg-white/40 rounded-[28px] border border-white/60 relative hover:bg-white/60 transition-colors">
+                            <button @click="removeAccount(idx)" class="absolute top-4 right-4 text-xs text-red-500 font-bold hover:bg-red-50 p-2 rounded-lg transition">移除</button>
+                            
+                            <h3 class="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4">账号 {{ idx + 1 }}</h3>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="space-y-1">
+                                    <label class="text-xs font-medium text-gray-500 ml-2">AccessKey ID</label>
+                                    <input v-model="acc.AccessKeyId" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-xs font-medium text-gray-500 ml-2">AccessKey Secret</label>
+                                    <input v-model="acc.AccessKeySecret" type="password" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-xs font-medium text-gray-500 ml-2">Instance ID</label>
+                                    <input v-model="acc.instanceId" placeholder="实例 ID (必填)" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                </div>
+                                 <div class="space-y-1 relative">
+                                    <label class="text-xs font-medium text-gray-500 ml-2">Region ID</label>
+                                    <input v-model="acc.regionId" 
+                                           @focus="regionSearchFocus = idx" 
+                                           @blur="setTimeout(() => regionSearchFocus = -1, 200)"
+                                           placeholder="输入地域名称或代码..." 
+                                           class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                    
+                                    <transition name="dropdown">
+                                        <div v-show="regionSearchFocus === idx" class="absolute left-0 right-0 top-full mt-2 bg-white/90 backdrop-blur-md border border-gray-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto no-scrollbar">
+                                            <ul>
+                                                <li v-for="region in aliyunRegions.filter(r => !acc.regionId || r.id.toLowerCase().includes(acc.regionId.toLowerCase()) || r.name.includes(acc.regionId))" 
+                                                    @click="acc.regionId = region.id; regionSearchFocus = -1"
+                                                    class="px-4 py-2 text-xs hover:bg-gray-100 cursor-pointer border-b border-gray-100/50 last:border-0 flex justify-between items-center group">
+                                                    <span class="font-medium text-gray-800">{{ region.name }}</span>
+                                                    <span class="text-[10px] text-gray-400 group-hover:text-gray-600 font-mono">{{ region.id }}</span>
+                                                </li>
+                                                <li v-if="aliyunRegions.filter(r => !acc.regionId || r.id.toLowerCase().includes(acc.regionId.toLowerCase()) || r.name.includes(acc.regionId)).length === 0" class="px-4 py-3 text-xs text-gray-400 text-center">
+                                                    无匹配地域
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </transition>
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-xs font-medium text-gray-500 ml-2">Max Traffic (GB)</label>
+                                    <input v-model.number="acc.maxTraffic" type="number" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                </div>
                             </div>
-                            <div class="space-y-1">
-                                <label class="text-xs font-medium text-gray-500 ml-2">AccessKey Secret</label>
-                                <input v-model="acc.AccessKeySecret" type="password" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
-                            </div>
-                            <div class="space-y-1">
-                                <label class="text-xs font-medium text-gray-500 ml-2">Instance ID</label>
-                                <input v-model="acc.instanceId" placeholder="实例 ID (必填)" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
-                            </div>
-                             <div class="space-y-1 relative">
-                                <label class="text-xs font-medium text-gray-500 ml-2">Region ID</label>
-                                <input v-model="acc.regionId" 
-                                       @focus="regionSearchFocus = idx" 
-                                       @blur="setTimeout(() => regionSearchFocus = -1, 200)"
-                                       placeholder="输入地域名称或代码..." 
-                                       class="w-full glass-input rounded-xl px-4 py-2 text-sm">
-                                
-                                <transition name="dropdown">
-                                    <div v-show="regionSearchFocus === idx" class="absolute left-0 right-0 top-full mt-2 bg-white/90 backdrop-blur-md border border-gray-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto no-scrollbar">
-                                        <ul>
-                                            <li v-for="region in aliyunRegions.filter(r => !acc.regionId || r.id.toLowerCase().includes(acc.regionId.toLowerCase()) || r.name.includes(acc.regionId))" 
-                                                @click="acc.regionId = region.id; regionSearchFocus = -1"
-                                                class="px-4 py-2 text-xs hover:bg-gray-100 cursor-pointer border-b border-gray-100/50 last:border-0 flex justify-between items-center group">
-                                                <span class="font-medium text-gray-800">{{ region.name }}</span>
-                                                <span class="text-[10px] text-gray-400 group-hover:text-gray-600 font-mono">{{ region.id }}</span>
-                                            </li>
-                                            <li v-if="aliyunRegions.filter(r => !acc.regionId || r.id.toLowerCase().includes(acc.regionId.toLowerCase()) || r.name.includes(acc.regionId)).length === 0" class="px-4 py-3 text-xs text-gray-400 text-center">
-                                                无匹配地域
-                                            </li>
-                                        </ul>
+
+                            <div class="mt-6 pt-4 border-t border-gray-200/50">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="relative inline-block w-8 mr-1">
+                                        <input type="checkbox" v-model="acc.schedule.enabled" :id="'sched-'+idx" class="peer sr-only"/>
+                                        <label :for="'sched-'+idx" class="block overflow-hidden h-4 w-8 rounded-full bg-gray-300 cursor-pointer transition-colors peer-checked:bg-[#1C1C1E]"></label>
+                                        <div class="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
                                     </div>
-                                </transition>
-                            </div>
-                            <div class="space-y-1">
-                                <label class="text-xs font-medium text-gray-500 ml-2">Max Traffic (GB)</label>
-                                <input v-model.number="acc.maxTraffic" type="number" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                    <span class="text-sm font-bold text-gray-700">启用定时开关机</span>
+                                </div>
+                                
+                                <div v-if="acc.schedule && acc.schedule.enabled" class="flex flex-wrap gap-4 items-center animate-fade-in">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs text-gray-500">开机时间</span>
+                                        <input type="time" v-model="acc.schedule.startTime" class="bg-white/80 border border-gray-200 rounded-lg px-2 py-1 text-sm">
+                                    </div>
+                                    <div class="w-4 h-px bg-gray-300"></div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-xs text-gray-500">关机时间</span>
+                                        <input type="time" v-model="acc.schedule.stopTime" class="bg-white/80 border border-gray-200 rounded-lg px-2 py-1 text-sm">
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="mt-6 pt-4 border-t border-gray-200/50">
-                            <div class="flex items-center gap-3 mb-3">
-                                <div class="relative inline-block w-8 mr-1">
-                                    <input type="checkbox" v-model="acc.schedule.enabled" :id="'sched-'+idx" class="peer sr-only"/>
-                                    <label :for="'sched-'+idx" class="block overflow-hidden h-4 w-8 rounded-full bg-gray-300 cursor-pointer transition-colors peer-checked:bg-[#1C1C1E]"></label>
-                                    <div class="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
-                                </div>
-                                <span class="text-sm font-bold text-gray-700">启用定时开关机</span>
-                            </div>
-                            
-                            <div v-if="acc.schedule && acc.schedule.enabled" class="flex flex-wrap gap-4 items-center animate-fade-in">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-xs text-gray-500">开机时间</span>
-                                    <input type="time" v-model="acc.schedule.startTime" class="bg-white/80 border border-gray-200 rounded-lg px-2 py-1 text-sm">
-                                </div>
-                                <div class="w-4 h-px bg-gray-300"></div>
-                                <div class="flex items-center gap-2">
-                                    <span class="text-xs text-gray-500">关机时间</span>
-                                    <input type="time" v-model="acc.schedule.stopTime" class="bg-white/80 border border-gray-200 rounded-lg px-2 py-1 text-sm">
-                                </div>
-                            </div>
+                        <button @click="addAccount" class="w-full py-4 rounded-2xl border border-dashed border-gray-300 text-gray-400 hover:bg-white/40 hover:text-gray-600 transition font-medium">+ 添加账号</button>
+
+                        <div class="flex justify-end pt-6">
+                            <button @click="saveConfig" class="bg-[#1C1C1E] text-white px-10 py-4 rounded-2xl font-bold shadow-xl tap-effect hover:shadow-2xl transition-all">保存所有配置</button>
                         </div>
                     </div>
+                </div>
 
-                    <button @click="addAccount" class="w-full py-4 rounded-2xl border border-dashed border-gray-300 text-gray-400 hover:bg-white/40 hover:text-gray-600 transition font-medium">+ 添加账号</button>
-
-                    <div class="flex justify-end pt-6">
-                        <button @click="saveConfig" class="bg-[#1C1C1E] text-white px-10 py-4 rounded-2xl font-bold shadow-xl tap-effect hover:shadow-2xl transition-all">保存所有配置</button>
+                <!-- System Logs (New) -->
+                <div class="glass-panel rounded-[40px] p-8 relative overflow-hidden">
+                    <h3 class="text-lg font-bold mb-6 text-[#1C1C1E] flex items-center justify-between">
+                        系统执行日志
+                        <button @click="fetchLogs" class="text-xs font-normal text-blue-500 hover:text-blue-600 transition">刷新日志</button>
+                    </h3>
+                    <div class="overflow-y-auto max-h-96 pr-2 no-scrollbar">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr>
+                                    <th class="text-xs font-bold text-gray-400 uppercase tracking-wider pb-3 pl-2">时间</th>
+                                    <th class="text-xs font-bold text-gray-400 uppercase tracking-wider pb-3">类型</th>
+                                    <th class="text-xs font-bold text-gray-400 uppercase tracking-wider pb-3">内容</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-sm text-gray-600">
+                                <tr v-for="(log, i) in systemLogs" :key="i" class="border-t border-gray-100/50 hover:bg-white/40 transition-colors">
+                                    <td class="py-3 pl-2 text-gray-500 font-mono text-xs whitespace-nowrap">{{ log.time_str }}</td>
+                                    <td class="py-3">
+                                        <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide" 
+                                              :class="{
+                                                  'bg-blue-100 text-blue-700': log.type === 'info',
+                                                  'bg-yellow-100 text-yellow-700': log.type === 'warning',
+                                                  'bg-red-100 text-red-700': log.type === 'error'
+                                              }">
+                                            {{ log.type }}
+                                        </span>
+                                    </td>
+                                    <td class="py-3 pr-2">{{ log.message }}</td>
+                                </tr>
+                                <tr v-if="systemLogs.length === 0">
+                                    <td colspan="3" class="py-8 text-center text-gray-400 text-xs">暂无日志记录</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -480,7 +537,9 @@
             const initialized = ref(true); 
             const loadingCheckInit = ref(true);
             const regionSearchFocus = ref(-1); 
-            const refreshingMap = ref({}); // 用于跟踪每个卡片的刷新状态
+            const refreshingMap = ref({});
+            const systemLogs = ref([]); 
+            const cronWarning = ref(false); // 新增：心跳异常警告
 
             // 阿里云地域数据 (...省略...)
             const aliyunRegions = [
@@ -580,6 +639,7 @@
                     if (data.logged_in) {
                         isAdmin.value = true;
                         fetchConfig(); 
+                        fetchLogs(); 
                     }
                     fetchData();
                 } catch (e) {
@@ -599,7 +659,19 @@
                     if (json.error) {
                         criticalError.value = json.error;
                     } else {
-                        statusData.value = json.data || []; 
+                        statusData.value = json.data || [];
+                        
+                        // 检查心跳
+                        if (json.system_last_run) {
+                            const now = Math.floor(Date.now() / 1000);
+                            const diff = now - json.system_last_run;
+                            // 改为 180 秒 (3分钟)
+                            cronWarning.value = diff > 180;
+                        } else {
+                             // 如果从来没运行过，也视为异常 (初始化阶段除外，这里简化判断)
+                             // 如果有数据但没心跳记录，说明可能是旧版升级上来第一次运行
+                             if (statusData.value.length > 0) cronWarning.value = true;
+                        }
                     }
                 } catch (e) {
                     console.error(e);
@@ -618,7 +690,7 @@
                     });
                     const data = await res.json();
                     if (data.success) {
-                        await fetchData(); // 刷新成功后重新拉取最新数据
+                        await fetchData(); 
                     } else {
                         console.error('Refresh failed');
                     }
@@ -629,12 +701,12 @@
                 }
             };
 
-            // ... (Other functions remain same) ...
             const toggleAdmin = () => {
                 if (isAdmin.value) {
                     fetch('index.php?action=logout').then(() => {
                         isAdmin.value = false;
                         config.value = null;
+                        systemLogs.value = []; 
                     });
                 } else {
                     showLoginModal.value = true;
@@ -653,6 +725,7 @@
                         showLoginModal.value = false;
                         passwordInput.value = '';
                         fetchConfig();
+                        fetchLogs(); 
                     } else {
                         alert('密码错误');
                     }
@@ -684,6 +757,18 @@
                 } catch(e) { alert('保存请求失败'); }
             };
 
+            // 新增：获取系统日志
+            const fetchLogs = async () => {
+                if (!isAdmin.value) return;
+                try {
+                    const res = await fetch('index.php?action=get_logs');
+                    const data = await res.json();
+                    if (data.data) {
+                        systemLogs.value = data.data;
+                    }
+                } catch (e) { console.error('Fetch logs failed', e); }
+            };
+
             const sendTestEmail = async () => {
                 if (!config.value || !config.value.Notification.email) { alert('请先填写接收邮箱并保存配置'); return; }
                 if(!confirm('发送测试邮件将使用已保存的配置。继续发送吗？')) { return; }
@@ -713,8 +798,8 @@
 
             return {
                 statusData, loading, isAdmin, checkingLogin, showLoginModal, passwordInput, config, initialized, loadingCheckInit, setupData, criticalError,
-                regionSearchFocus, aliyunRegions, refreshingMap,
-                toggleAdmin, performLogin, saveConfig, sendTestEmail, sendingEmail, addAccount, removeAccount, getInstanceStatusColor, performSetup, refreshSingle
+                regionSearchFocus, aliyunRegions, refreshingMap, systemLogs, cronWarning,
+                toggleAdmin, performLogin, saveConfig, sendTestEmail, sendingEmail, addAccount, removeAccount, getInstanceStatusColor, performSetup, refreshSingle, fetchLogs
             };
         }
     }).mount('#app');
