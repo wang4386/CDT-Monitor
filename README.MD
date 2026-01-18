@@ -48,7 +48,7 @@
 ### 1. 获取源代码
 
 ```
-git clone [https://github.com/wang4386/CDT-Monitor.git](https://github.com/wang4386/CDT-Monitor.git)
+git clone https://github.com/wang4386/CDT-Monitor.git
 cd CDT-Monitor
 ```
 
