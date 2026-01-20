@@ -83,6 +83,10 @@
         .dropdown-enter-from, .dropdown-leave-to { opacity: 0; transform: translateY(-10px); }
 
         body { background-color: #F2F2F7; }
+
+        /* Chart Modal Animations */
+        .chart-enter-active, .chart-leave-active { transition: all 0.3s ease; }
+        .chart-enter-from, .chart-leave-to { opacity: 0; transform: translateY(10px); }
     </style>
 </head>
 <body class="text-[#1C1C1E]">
@@ -125,7 +129,8 @@
             <div class="absolute top-0 right-0 p-6 opacity-50 flex gap-2">
                 <!-- 图表按钮 (新增) -->
                 <button v-if="isAdmin" @click="openChart(item.id, item.account)"
-                        class="p-1 rounded-full hover:bg-white/50 text-gray-400 hover:text-blue-500 transition-colors mr-1">
+                        class="p-1 rounded-full hover:bg-white/50 text-gray-400 hover:text-blue-500 transition-colors mr-1"
+                        title="查看流量历史">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
                     </svg>
@@ -186,32 +191,48 @@
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800"></div>
     </div>
 
-    <!-- Chart Modal (New) -->
+    <!-- Chart Modal (Updated) -->
     <div v-if="showChartModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-gray-200/30 backdrop-blur-md" @click="closeChart"></div>
-        <div class="glass-panel w-full max-w-4xl p-6 rounded-[40px] relative z-10 shadow-2xl bg-white/90">
-            <div class="flex justify-between items-center mb-6">
+        <div class="absolute inset-0 bg-gray-300/30 backdrop-blur-md" @click="closeChart"></div>
+        <div class="glass-panel w-full max-w-5xl h-[500px] flex flex-col p-0 rounded-[32px] relative z-10 shadow-2xl bg-white/90 overflow-hidden">
+            <!-- Header -->
+            <div class="flex justify-between items-center p-6 border-b border-gray-100">
                 <div>
-                    <h3 class="text-xl font-bold text-[#1C1C1E]">流量趋势</h3>
-                    <p class="text-xs text-gray-400 font-mono mt-1">{{ currentChartAccount }}</p>
+                    <h3 class="text-xl font-bold text-[#1C1C1E]">流量统计</h3>
+                    <p class="text-xs text-gray-400 font-mono mt-1">账号: {{ currentChartAccount }}</p>
                 </div>
-                <div class="flex bg-gray-100 rounded-lg p-1">
-                    <button @click="switchChartMode('30d')" 
-                            class="px-3 py-1 text-xs font-medium rounded-md transition-all"
-                            :class="chartMode === '30d' ? 'bg-white shadow text-black' : 'text-gray-500'">30天</button>
+                
+                <!-- Tab Switcher -->
+                <div class="bg-gray-100 p-1 rounded-xl flex gap-1">
                     <button @click="switchChartMode('24h')" 
-                            class="px-3 py-1 text-xs font-medium rounded-md transition-all"
-                            :class="chartMode === '24h' ? 'bg-white shadow text-black' : 'text-gray-500'">24小时</button>
+                            class="px-4 py-1.5 text-xs font-bold rounded-lg transition-all"
+                            :class="chartMode === '24h' ? 'bg-white text-[#1C1C1E] shadow-sm' : 'text-gray-400 hover:text-gray-600'">
+                        近24小时
+                    </button>
+                    <button @click="switchChartMode('30d')" 
+                            class="px-4 py-1.5 text-xs font-bold rounded-lg transition-all"
+                            :class="chartMode === '30d' ? 'bg-white text-[#1C1C1E] shadow-sm' : 'text-gray-400 hover:text-gray-600'">
+                        近30天
+                    </button>
                 </div>
+
+                <button @click="closeChart" class="p-2 rounded-full hover:bg-gray-100 text-gray-400 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
             </div>
             
-            <div v-if="chartLoading" class="h-80 flex items-center justify-center">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800"></div>
-            </div>
-            <div v-show="!chartLoading" id="echarts-container" class="w-full h-80"></div>
-            
-            <div class="mt-4 text-center">
-                 <button @click="closeChart" class="text-sm text-gray-500 hover:text-gray-800 transition">关闭</button>
+            <!-- Chart Body -->
+            <div class="flex-1 p-6 relative">
+                <div v-if="chartLoading" class="absolute inset-0 flex items-center justify-center bg-white/50 z-20">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800"></div>
+                </div>
+                <div id="echarts-container" class="w-full h-full"></div>
+                
+                <!-- Empty State -->
+                <div v-if="!chartLoading && isChartEmpty" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 pointer-events-none">
+                    <svg class="w-12 h-12 mb-2 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                    <p class="text-sm">暂无统计数据 (等待整点更新)</p>
+                </div>
             </div>
         </div>
     </div>
@@ -559,7 +580,7 @@
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script>
-    const { createApp, ref, onMounted } = Vue;
+    const { createApp, ref, onMounted, computed } = Vue;
 
     createApp({
         setup() {
@@ -583,11 +604,11 @@
             // 图表相关
             const showChartModal = ref(false);
             const chartLoading = ref(false);
-            const chartMode = ref('30d');
+            const chartMode = ref('24h'); // 默认为24小时
             const currentChartId = ref(0);
             const currentChartAccount = ref('');
             let chartInstance = null;
-            let currentChartData = {}; // 缓存当前请求的图表数据
+            let currentChartData = {}; 
 
             // 阿里云地域数据 (...省略...)
             const aliyunRegions = [
@@ -755,7 +776,7 @@
                 chartLoading.value = true;
                 currentChartId.value = id;
                 currentChartAccount.value = accountName;
-                chartMode.value = '30d'; // 默认显示30天
+                chartMode.value = '24h'; // 默认24小时
 
                 try {
                     const res = await fetch(`index.php?action=get_history&id=${id}`);
@@ -789,6 +810,14 @@
                 renderChart();
             };
 
+            const isChartEmpty = computed(() => {
+                if (chartMode.value === '24h') {
+                    return !currentChartData.history_24h || currentChartData.history_24h.length === 0;
+                } else {
+                    return !currentChartData.history_30d || currentChartData.history_30d.length === 0;
+                }
+            });
+
             const renderChart = () => {
                 if (!chartInstance) return;
 
@@ -796,64 +825,84 @@
                 let sData = [];
                 let is30d = chartMode.value === '30d';
 
-                if (is30d && currentChartData.history_30d) {
-                    xData = currentChartData.history_30d.map(i => i.date);
-                    sData = currentChartData.history_30d.map(i => i.value);
-                } else if (!is30d && currentChartData.history_24h) {
-                    xData = currentChartData.history_24h.map(i => i.time);
-                    sData = currentChartData.history_24h.map(i => i.value);
+                // 数据映射
+                if (is30d) {
+                    if (currentChartData.history_30d) {
+                        xData = currentChartData.history_30d.map(i => i.date);
+                        sData = currentChartData.history_30d.map(i => i.value);
+                    }
+                } else {
+                    if (currentChartData.history_24h) {
+                        xData = currentChartData.history_24h.map(i => i.time);
+                        sData = currentChartData.history_24h.map(i => i.value);
+                    }
+                }
+
+                if (xData.length === 0) {
+                    chartInstance.clear();
+                    return;
                 }
 
                 // ECharts 配置
                 const option = {
                     tooltip: {
                         trigger: 'axis',
-                        formatter: '{b} <br/> 流量: {c} GB'
+                        formatter: function(params) {
+                            const item = params[0];
+                            return `${item.name}<br/><span style="display:inline-block;margin-right:4px;border-radius:10px;width:10px;height:10px;background-color:${item.color};"></span>流量: <span style="font-weight:bold">${item.value}</span> GB`;
+                        },
+                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                        borderColor: '#E5E7EB',
+                        textStyle: { color: '#1F2937' }
                     },
                     grid: {
-                        left: '3%', right: '4%', bottom: '3%', top: '10%',
+                        left: '2%', right: '3%', bottom: '3%', top: '12%',
                         containLabel: true
                     },
                     xAxis: {
                         type: 'category',
-                        boundaryGap: is30d, // 30天用柱状图，留间隙；24h用折线图，不留
+                        boundaryGap: is30d, // 30天柱状图留间隙，24h折线图不留
                         data: xData,
-                        axisLine: { lineStyle: { color: '#ccc' } },
-                        axisLabel: { color: '#666' }
+                        axisLine: { lineStyle: { color: '#E5E7EB' } },
+                        axisLabel: { color: '#6B7280', fontSize: 11 },
+                        axisTick: { show: false }
                     },
                     yAxis: {
                         type: 'value',
-                        name: 'GB',
-                        splitLine: { lineStyle: { type: 'dashed', color: '#eee' } }
+                        name: '流量 (GB)',
+                        nameTextStyle: { color: '#9CA3AF', padding: [0, 0, 0, 20] },
+                        splitLine: { lineStyle: { type: 'dashed', color: '#F3F4F6' } },
+                        axisLabel: { color: '#6B7280', fontSize: 11 }
                     },
                     series: [{
                         data: sData,
                         type: is30d ? 'bar' : 'line',
                         smooth: true,
-                        itemStyle: { color: is30d ? '#1C1C1E' : '#007AFF' },
+                        barMaxWidth: 30, // 限制柱状图最大宽度
+                        itemStyle: { 
+                            color: is30d ? new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: '#1C1C1E' },
+                                { offset: 1, color: '#4B5563' }
+                            ]) : '#007AFF',
+                            borderRadius: is30d ? [4, 4, 0, 0] : 0
+                        },
+                        lineStyle: is30d ? {} : {
+                            width: 3,
+                            shadowColor: 'rgba(0, 122, 255, 0.3)',
+                            shadowBlur: 10
+                        },
                         areaStyle: is30d ? null : {
                             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                { offset: 0, color: 'rgba(0,122,255,0.3)' },
-                                { offset: 1, color: 'rgba(0,122,255,0.01)' }
+                                { offset: 0, color: 'rgba(0,122,255,0.2)' },
+                                { offset: 1, color: 'rgba(0,122,255,0.0)' }
                             ])
                         },
-                        showSymbol: false
+                        showSymbol: !is30d, // 折线图显示点
+                        symbolSize: 6
                     }]
                 };
 
-                // 如果是30天，增加折线趋势辅助
-                if (is30d) {
-                     option.series.push({
-                        data: sData,
-                        type: 'line',
-                        smooth: true,
-                        lineStyle: { color: '#FF3B30', width: 2, type: 'dashed' },
-                        itemStyle: { opacity: 0 }, // 隐藏点
-                        tooltip: { show: false } // 不重复显示tooltip
-                     });
-                }
-
-                chartInstance.setOption(option);
+                chartInstance.setOption(option, true); // true = 不合并配置，彻底重绘
             };
 
             const closeChart = () => {
@@ -963,7 +1012,7 @@
             return {
                 statusData, loading, isAdmin, checkingLogin, showLoginModal, passwordInput, config, initialized, loadingCheckInit, setupData, criticalError,
                 regionSearchFocus, aliyunRegions, refreshingMap, systemLogs, cronWarning,
-                showChartModal, chartLoading, chartMode, currentChartAccount, openChart, closeChart, switchChartMode,
+                showChartModal, chartLoading, chartMode, currentChartAccount, openChart, closeChart, switchChartMode, isChartEmpty,
                 toggleAdmin, performLogin, saveConfig, sendTestEmail, sendingEmail, addAccount, removeAccount, getInstanceStatusColor, performSetup, refreshSingle, fetchLogs
             };
         }
