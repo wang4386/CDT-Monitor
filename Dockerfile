@@ -22,6 +22,9 @@ FROM php:8.2-fpm-alpine
 # 设置镜像元数据
 LABEL maintainer="CDT-Monitor-Docker"
 
+# 设置环境变量：默认时区
+ENV TZ=Asia/Shanghai
+
 # 1. 安装运行时系统依赖 (运行 Nginx, SQLite, Cron 必需)
 # 2. 安装构建依赖 (编译 PHP 扩展必需，编译后会删除)
 RUN apk add --no-cache \
@@ -48,12 +51,17 @@ RUN apk add --no-cache \
     mbstring \
     opcache \
     \
-    # 4. 清理构建依赖和缓存，极大减小镜像体积
+    # 4. 配置系统时区 (关键修复)
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    && echo $TZ > /etc/timezone \
+    \
+    # 5. 清理构建依赖和缓存，极大减小镜像体积
     && apk del .build-deps \
     && rm -rf /var/cache/apk/*
 
-# 配置 PHP 推荐设置 (生产环境)
-RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+# 配置 PHP 推荐设置 (生产环境) 并修正 PHP 时区
+RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+    && sed -i "s/;date.timezone =/date.timezone = Asia\/Shanghai/g" "$PHP_INI_DIR/php.ini"
 
 # 配置工作目录
 WORKDIR /var/www/html
