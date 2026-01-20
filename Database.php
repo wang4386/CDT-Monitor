@@ -59,6 +59,8 @@ class Database
             $this->pdo = new PDO('sqlite:' . $this->dbFile);
             $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             $this->pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+            // 开启 WAL 模式，提高并发读写性能
+            $this->pdo->exec('PRAGMA journal_mode = WAL;');
         } catch (PDOException $e) {
             if (strpos($e->getMessage(), 'unable to open database file') !== false) {
                 $this->throwPermissionError(dirname($this->dbFile));
@@ -152,14 +154,11 @@ class Database
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    // --- 新增：按类型获取日志 ---
     public function getLogsByTypes(array $types, $limit = 20)
     {
-        // 动态构建 IN 查询占位符
         $placeholders = implode(',', array_fill(0, count($types), '?'));
         $sql = "SELECT * FROM logs WHERE type IN ($placeholders) ORDER BY id DESC LIMIT ?";
         
-        // 合并参数
         $params = $types;
         $params[] = $limit;
 
@@ -168,7 +167,6 @@ class Database
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    // --- 新增：按类型删除日志 ---
     public function clearLogsByTypes(array $types)
     {
         $placeholders = implode(',', array_fill(0, count($types), '?'));
@@ -176,10 +174,76 @@ class Database
         return $stmt->execute($types);
     }
 
-    public function pruneLogs($days = 30)
+    /**
+     * 优化后的日志清理逻辑
+     * @param int $defaultDays 默认保留天数（用于重要日志）
+     * @param int $heartbeatDays 心跳日志保留天数（建议设置较短，如3天）
+     */
+    public function pruneLogs($defaultDays = 30, $heartbeatDays = 3)
     {
-        $stmt = $this->pdo->prepare("DELETE FROM logs WHERE created_at < ?");
-        $stmt->execute([time() - ($days * 86400)]);
+        $now = time();
+
+        // 1. 清理过期心跳日志 (Heartbeat) - 激进清理
+        $stmt = $this->pdo->prepare("DELETE FROM logs WHERE type = 'heartbeat' AND created_at < ?");
+        $stmt->execute([$now - ($heartbeatDays * 86400)]);
+
+        // 2. 清理其他过期日志 (Info, Warning, Error) - 保守清理
+        $stmt = $this->pdo->prepare("DELETE FROM logs WHERE type != 'heartbeat' AND created_at < ?");
+        $stmt->execute([$now - ($defaultDays * 86400)]);
+    }
+
+    /**
+     * 重置 Logs 表的自增 ID 并重新排序
+     * 这是一个较重的操作，但能保证 ID 连续
+     */
+    public function reorderLogsIds()
+    {
+        try {
+            $this->pdo->beginTransaction();
+            
+            // 1. 检查是否有数据
+            $count = $this->pdo->query("SELECT COUNT(*) FROM logs")->fetchColumn();
+            
+            if ($count == 0) {
+                // 如果没数据，直接重置序号为 0
+                $this->pdo->exec("DELETE FROM sqlite_sequence WHERE name='logs'");
+                $this->pdo->exec("DELETE FROM logs"); // 确保空
+            } else {
+                // 2. 使用临时表重排数据
+                // 创建临时表保存现有数据，按时间正序排列
+                $this->pdo->exec("CREATE TEMPORARY TABLE logs_temp AS SELECT type, message, created_at FROM logs ORDER BY created_at ASC");
+                
+                // 清空原表
+                $this->pdo->exec("DELETE FROM logs");
+                
+                // 重置自增序列
+                $this->pdo->exec("DELETE FROM sqlite_sequence WHERE name='logs'");
+                
+                // 将数据插回原表，ID 会自动从 1 开始重新生成
+                $this->pdo->exec("INSERT INTO logs (type, message, created_at) SELECT type, message, created_at FROM logs_temp");
+                
+                // 删除临时表
+                $this->pdo->exec("DROP TABLE logs_temp");
+            }
+            
+            $this->pdo->commit();
+            return true;
+        } catch (Exception $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            // 记录错误到错误日志文件（如果有），或者忽略，因为这不是关键业务
+            return false;
+        }
+    }
+
+    /**
+     * 整理数据库碎片 (VACUUM)
+     * 释放已删除数据占用的磁盘空间
+     */
+    public function vacuum()
+    {
+        $this->pdo->exec("VACUUM");
     }
 
     // --- 登录频率限制相关方法 ---
@@ -208,16 +272,13 @@ class Database
     public function addHourlyStat($accessKeyId, $traffic)
     {
         $hourTimestamp = floor(time() / 3600) * 3600;
-        // 修改为 INSERT OR REPLACE，实现当前小时流量实时更新
         $stmt = $this->pdo->prepare("INSERT OR REPLACE INTO traffic_hourly (access_key_id, traffic, recorded_at) VALUES (?, ?, ?)");
         $stmt->execute([$accessKeyId, $traffic, $hourTimestamp]);
     }
 
     public function addDailyStat($accessKeyId, $traffic)
     {
-        // 归一化到当天 00:00:00
         $dayTimestamp = strtotime(date('Y-m-d 00:00:00'));
-        // 修改为 INSERT OR REPLACE，实现当日流量实时更新，直到第二天0点生成新条目
         $stmt = $this->pdo->prepare("INSERT OR REPLACE INTO traffic_daily (access_key_id, traffic, recorded_at) VALUES (?, ?, ?)");
         $stmt->execute([$accessKeyId, $traffic, $dayTimestamp]);
     }

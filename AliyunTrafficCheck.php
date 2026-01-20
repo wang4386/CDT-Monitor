@@ -161,16 +161,24 @@ class AliyunTrafficCheck
         return $logs;
     }
 
-    // --- 新增：清空日志 ---
+    // --- 新增：清空日志并重排 ID ---
     public function clearSystemLogs($tab = 'action')
     {
         if ($this->initError) return false;
         
+        $result = false;
         if ($tab === 'heartbeat') {
-            return $this->db->clearLogsByTypes(['heartbeat']);
+            $result = $this->db->clearLogsByTypes(['heartbeat']);
         } else {
-            return $this->db->clearLogsByTypes(['info', 'warning', 'error']); // 清空动作日志时连带Error一起清空，保持干净
+            $result = $this->db->clearLogsByTypes(['info', 'warning', 'error']);
         }
+        
+        // 关键改动：清空后立即重排剩余 ID
+        if ($result) {
+            $this->db->reorderLogsIds();
+        }
+        
+        return $result;
     }
 
     public function getAccountHistory($id)
@@ -213,8 +221,19 @@ class AliyunTrafficCheck
     {
         if ($this->initError) return "Error: " . $this->initError;
         
-        $this->db->pruneLogs(30);
+        // 优化：分级清理日志
+        // 普通/重要日志保留 30 天，高频心跳日志仅保留 3 天
+        $this->db->pruneLogs(30, 3);
+        
+        // 关键改动：每次清理后重排 ID，保证 ID 永远紧凑
+        $this->db->reorderLogsIds();
+
         $this->db->pruneStats(); 
+        
+        // 优化：每天凌晨 04:xx 执行一次 VACUUM 整理数据库碎片
+        if (date('H') === '04' && date('i') === '00') {
+            $this->db->vacuum();
+        }
 
         $logs = [];
         $currentUserTime = date('H:i');
