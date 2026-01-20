@@ -101,16 +101,27 @@ class Database
             attempt_time INTEGER
         )");
 
-        // 新增：流量历史记录表
-        // 注意：这里使用 access_key_id 作为关联键，因为 id 会因为 reorderIds 而改变
-        $this->pdo->exec("CREATE TABLE IF NOT EXISTS traffic_history (
+        // --- 新增：独立的小时级和天级流量表 ---
+        
+        // 1. 小时级表 (24小时折线图)
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS traffic_hourly (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             access_key_id TEXT,
             traffic REAL,
             recorded_at INTEGER
         )");
-        // 为 access_key_id 和 recorded_at 创建索引，加速查询
-        $this->pdo->exec("CREATE INDEX IF NOT EXISTS idx_traffic_ak_time ON traffic_history (access_key_id, recorded_at)");
+        // 唯一索引：确保每个 AK 在每个小时（时间戳归一化后）只有一条记录
+        $this->pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_traffic_hourly_unique ON traffic_hourly (access_key_id, recorded_at)");
+
+        // 2. 天级表 (30天柱状图)
+        $this->pdo->exec("CREATE TABLE IF NOT EXISTS traffic_daily (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            access_key_id TEXT,
+            traffic REAL,
+            recorded_at INTEGER
+        )");
+        // 唯一索引：确保每个 AK 在每天（时间戳归一化后）只有一条记录
+        $this->pdo->exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_traffic_daily_unique ON traffic_daily (access_key_id, recorded_at)");
 
         $this->ensureColumn('accounts', 'traffic_used', 'REAL DEFAULT 0');
         $this->ensureColumn('accounts', 'instance_status', "TEXT DEFAULT 'Unknown'");
@@ -172,29 +183,70 @@ class Database
         $stmt->execute([$ip]);
     }
 
-    // --- 流量历史记录相关方法 ---
+    // --- 新的流量记录逻辑 ---
 
-    public function addTrafficHistory($accessKeyId, $traffic)
+    /**
+     * 记录小时级数据
+     * 利用 UNIQUE INDEX 和 INSERT OR IGNORE 实现“每小时只记一条”
+     */
+    public function addHourlyStat($accessKeyId, $traffic)
     {
-        // 简单策略：直接插入。查询时再进行聚合。
-        // 为了避免数据量过大，可以在插入前判断：如果最近 5 分钟内已有记录且流量未变，则跳过？
-        // 这里为了图表平滑，我们选择全部记录（由 monitor 调用频率决定，通常每1-10分钟一次）
-        $stmt = $this->pdo->prepare("INSERT INTO traffic_history (access_key_id, traffic, recorded_at) VALUES (?, ?, ?)");
-        $stmt->execute([$accessKeyId, $traffic, time()]);
+        // 归一化到当前小时的整点 (例如 10:23 -> 10:00)
+        $hourTimestamp = floor(time() / 3600) * 3600;
+        
+        $stmt = $this->pdo->prepare("INSERT OR IGNORE INTO traffic_hourly (access_key_id, traffic, recorded_at) VALUES (?, ?, ?)");
+        $stmt->execute([$accessKeyId, $traffic, $hourTimestamp]);
     }
 
-    public function getTrafficHistory($accessKeyId, $startTime)
+    /**
+     * 记录天级数据
+     * 利用 UNIQUE INDEX 和 INSERT OR IGNORE 实现“每天只记一条”
+     */
+    public function addDailyStat($accessKeyId, $traffic)
     {
-        $stmt = $this->pdo->prepare("SELECT traffic, recorded_at FROM traffic_history WHERE access_key_id = ? AND recorded_at >= ? ORDER BY recorded_at ASC");
-        $stmt->execute([$accessKeyId, $startTime]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // 归一化到当天的 00:00
+        $dayTimestamp = strtotime(date('Y-m-d 00:00:00'));
+        
+        $stmt = $this->pdo->prepare("INSERT OR IGNORE INTO traffic_daily (access_key_id, traffic, recorded_at) VALUES (?, ?, ?)");
+        $stmt->execute([$accessKeyId, $traffic, $dayTimestamp]);
     }
 
-    public function pruneTrafficHistory($days = 31)
+    /**
+     * 获取最近 24 小时的数据
+     */
+    public function getHourlyStats($accessKeyId)
     {
-        // 清理超过指定天数的历史记录
-        $timestamp = time() - ($days * 86400);
-        $stmt = $this->pdo->prepare("DELETE FROM traffic_history WHERE recorded_at < ?");
-        $stmt->execute([$timestamp]);
+        // 获取最近 25 条，保证覆盖24小时
+        $stmt = $this->pdo->prepare("SELECT traffic, recorded_at FROM traffic_hourly WHERE access_key_id = ? ORDER BY recorded_at DESC LIMIT 25");
+        $stmt->execute([$accessKeyId]);
+        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // 按时间正序排列返回
+        return array_reverse($data);
+    }
+
+    /**
+     * 获取最近 30 天的数据
+     */
+    public function getDailyStats($accessKeyId)
+    {
+        $stmt = $this->pdo->prepare("SELECT traffic, recorded_at FROM traffic_daily WHERE access_key_id = ? ORDER BY recorded_at DESC LIMIT 31");
+        $stmt->execute([$accessKeyId]);
+        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return array_reverse($data);
+    }
+
+    /**
+     * 清理过期统计数据
+     */
+    public function pruneStats()
+    {
+        // 1. 清理小时表：保留最近 24+2 小时以外的数据
+        // 既然我们只取 Limit 24，其实可以删掉 48 小时前的
+        $hourLimit = time() - (48 * 3600);
+        $this->pdo->exec("DELETE FROM traffic_hourly WHERE recorded_at < $hourLimit");
+
+        // 2. 清理天表：保留最近 60 天以外的 (留点余量)
+        $dayLimit = time() - (60 * 86400);
+        $this->pdo->exec("DELETE FROM traffic_daily WHERE recorded_at < $dayLimit");
     }
 }
