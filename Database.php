@@ -223,7 +223,36 @@ class Database
         // 按时间正序排列返回
         return array_reverse($data);
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 =======
+=======
+    }
+
+    /**
+     * 获取最近 30 天的数据
+     */
+    public function getDailyStats($accessKeyId)
+    {
+        $stmt = $this->pdo->prepare("SELECT traffic, recorded_at FROM traffic_daily WHERE access_key_id = ? ORDER BY recorded_at DESC LIMIT 31");
+        $stmt->execute([$accessKeyId]);
+        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return array_reverse($data);
+    }
+
+    /**
+     * 清理过期统计数据
+     */
+    public function pruneStats()
+    {
+        // 1. 清理小时表：保留最近 24+2 小时以外的数据
+        // 既然我们只取 Limit 24，其实可以删掉 48 小时前的
+        $hourLimit = time() - (48 * 3600);
+        $this->pdo->exec("DELETE FROM traffic_hourly WHERE recorded_at < $hourLimit");
+
+        // 2. 清理天表：保留最近 60 天以外的 (留点余量)
+        $dayLimit = time() - (60 * 86400);
+        $this->pdo->exec("DELETE FROM traffic_daily WHERE recorded_at < $dayLimit");
+>>>>>>> Stashed changes
     }
 
     /**
