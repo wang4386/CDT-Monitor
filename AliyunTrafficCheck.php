@@ -139,17 +139,40 @@ class AliyunTrafficCheck
         return $config;
     }
 
-    public function getSystemLogs()
+    // --- 修改：支持按 Tab 获取日志 ---
+    public function getSystemLogs($tab = 'action')
     {
         if ($this->initError) return [];
-        $logs = $this->db->getLogs(50); 
+
+        if ($tab === 'heartbeat') {
+            // 心跳日志：只看 heartbeat 类型
+            $types = ['heartbeat'];
+        } else {
+            // 动作日志：只看 info 和 warning，排除 error (超时/接口错误)
+            $types = ['info', 'warning'];
+        }
+
+        // 仅返回最近 20 条
+        $logs = $this->db->getLogsByTypes($types, 20); 
+
         foreach ($logs as &$log) {
             $log['time_str'] = date('Y-m-d H:i:s', $log['created_at']);
         }
         return $logs;
     }
 
-    // --- 修改：获取流量历史数据（适配新表结构） ---
+    // --- 新增：清空日志 ---
+    public function clearSystemLogs($tab = 'action')
+    {
+        if ($this->initError) return false;
+        
+        if ($tab === 'heartbeat') {
+            return $this->db->clearLogsByTypes(['heartbeat']);
+        } else {
+            return $this->db->clearLogsByTypes(['info', 'warning', 'error']); // 清空动作日志时连带Error一起清空，保持干净
+        }
+    }
+
     public function getAccountHistory($id)
     {
         if ($this->initError) return [];
@@ -159,7 +182,6 @@ class AliyunTrafficCheck
 
         $ak = $account['access_key_id'];
 
-        // 1. 获取最近24小时数据 (Hourly)
         $rawHourly = $this->db->getHourlyStats($ak);
         $chartHourly = [];
         foreach ($rawHourly as $row) {
@@ -170,7 +192,6 @@ class AliyunTrafficCheck
             ];
         }
 
-        // 2. 获取最近30天数据 (Daily)
         $rawDaily = $this->db->getDailyStats($ak);
         $chartDaily = [];
         foreach ($rawDaily as $row) {
@@ -193,7 +214,7 @@ class AliyunTrafficCheck
         if ($this->initError) return "Error: " . $this->initError;
         
         $this->db->pruneLogs(30);
-        $this->db->pruneStats(); // 清理旧的统计数据
+        $this->db->pruneStats(); 
 
         $logs = [];
         $currentUserTime = date('H:i');
@@ -249,14 +270,6 @@ class AliyunTrafficCheck
 
             $shouldCheckApi = $forceRefresh || (($currentTime - $lastUpdate) > $currentInterval);
             
-            // 特殊检查：是否需要记录统计数据？
-            // 策略：Monitor每分钟运行，尝试插入当前整点和当前0点的数据。
-            // 由于数据库有 UNIQUE 索引 + INSERT OR IGNORE，只有每小时/每天第一次尝试会成功。
-            // 因此，我们不需要复杂的“是否已记录”判断，直接尝试记录即可。
-            // 但为了减少API调用，我们仅在“应该检查API”或者“尚未记录当前小时/天数据”时才调用API？
-            // 简单起见，利用现有的 $shouldCheckApi 逻辑。
-            // 如果为了保证整点记录的及时性，我们应该每分钟都检查一下是否到了整点？
-            // 优化：如果当前分钟是 00 (整点)，则强制刷新一次，确保整点数据最准确。
             if (date('i') === '00') {
                 $shouldCheckApi = true;
             }
@@ -264,7 +277,6 @@ class AliyunTrafficCheck
             $newUpdateTime = $currentTime;
 
             if ($shouldCheckApi) {
-                // 使用 Safe 方法
                 $newTraffic = $this->safeGetTraffic($account);
                 $status = $this->safeGetInstanceStatus($account);
                 
@@ -281,10 +293,7 @@ class AliyunTrafficCheck
                     $traffic = $newTraffic;
                     $apiStatusLog = "已更新";
                     
-                    // --- 修改：记录统计数据 ---
-                    // 尝试记录小时数据 (利用DB唯一性去重)
                     $this->db->addHourlyStat($account['access_key_id'], $traffic);
-                    // 尝试记录天数据 (利用DB唯一性去重)
                     $this->db->addDailyStat($account['access_key_id'], $traffic);
                 }
                 
@@ -365,7 +374,11 @@ class AliyunTrafficCheck
             }
 
             $actionLog = empty($actions) ? "无动作" : implode(", ", $actions);
-            $logs[] = sprintf("%s %s | %s | %s | %s", $logPrefix, $actionLog, $trafficDesc, $status, $apiStatusLog);
+            $logLine = sprintf("%s %s | %s | %s | %s", $logPrefix, $actionLog, $trafficDesc, $status, $apiStatusLog);
+            
+            // --- 修改：将心跳日志写入数据库 ---
+            $this->db->addLog('heartbeat', $logLine);
+            $logs[] = $logLine;
         }
         
         $this->configManager->updateLastRunTime(time());
@@ -393,7 +406,6 @@ class AliyunTrafficCheck
             $checkInterval = $isTransientState ? 60 : $userInterval;
 
             if (($currentTime - $lastUpdate) > $checkInterval) {
-                // 使用 Safe 方法
                 $newTraffic = $this->safeGetTraffic($account);
                 $status = $this->safeGetInstanceStatus($account);
                 
@@ -407,7 +419,6 @@ class AliyunTrafficCheck
                     $newUpdateTime = $lastUpdate;
                 } else {
                     $traffic = $newTraffic;
-                    // --- 修改：同时尝试记录统计数据 ---
                     $this->db->addHourlyStat($account['access_key_id'], $traffic);
                     $this->db->addDailyStat($account['access_key_id'], $traffic);
                 }
@@ -460,7 +471,6 @@ class AliyunTrafficCheck
         if ($traffic < 0) {
             $traffic = $targetAccount['traffic_used']; 
         } else {
-            // 手动刷新也尝试记录统计数据
             $this->db->addHourlyStat($targetAccount['access_key_id'], $traffic);
             $this->db->addDailyStat($targetAccount['access_key_id'], $traffic);
         }

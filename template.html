@@ -93,7 +93,6 @@
 
 <div id="app" v-cloak class="min-h-screen p-6 md:p-12 flex flex-col items-center">
     
-    <!-- 警告条 -->
     <div v-if="cronWarning && initialized && !criticalError" class="w-full max-w-5xl mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-xl shadow-sm animate-fade-in">
         <div class="flex">
             <div class="flex-shrink-0">
@@ -127,7 +126,6 @@
         <div v-for="(item, index) in statusData" :key="index" 
              class="glass-panel rounded-[32px] p-6 flex flex-col justify-between relative overflow-hidden group hover:shadow-2xl transition-all duration-500">
             <div class="absolute top-0 right-0 p-6 opacity-50 flex gap-2">
-                <!-- 图表按钮 (新增) -->
                 <button v-if="isAdmin" @click="openChart(item.id, item.account)"
                         class="p-1 rounded-full hover:bg-white/50 text-gray-400 hover:text-blue-500 transition-colors mr-1"
                         title="查看流量历史">
@@ -136,7 +134,6 @@
                     </svg>
                 </button>
                 
-                <!-- 刷新按钮 -->
                 <button v-if="isAdmin" @click="refreshSingle(item.id, index)" 
                         class="p-1 rounded-full hover:bg-white/50 text-gray-400 hover:text-gray-600 transition-colors"
                         :class="{'animate-spin': refreshingMap[index]}" 
@@ -191,18 +188,15 @@
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800"></div>
     </div>
 
-    <!-- Chart Modal (Updated) -->
     <div v-if="showChartModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-gray-300/30 backdrop-blur-md" @click="closeChart"></div>
         <div class="glass-panel w-full max-w-5xl h-[500px] flex flex-col p-0 rounded-[32px] relative z-10 shadow-2xl bg-white/90 overflow-hidden">
-            <!-- Header -->
             <div class="flex justify-between items-center p-6 border-b border-gray-100">
                 <div>
                     <h3 class="text-xl font-bold text-[#1C1C1E]">流量统计</h3>
                     <p class="text-xs text-gray-400 font-mono mt-1">账号: {{ currentChartAccount }}</p>
                 </div>
                 
-                <!-- Tab Switcher -->
                 <div class="bg-gray-100 p-1 rounded-xl flex gap-1">
                     <button @click="switchChartMode('24h')" 
                             class="px-4 py-1.5 text-xs font-bold rounded-lg transition-all"
@@ -221,14 +215,12 @@
                 </button>
             </div>
             
-            <!-- Chart Body -->
             <div class="flex-1 p-6 relative">
                 <div v-if="chartLoading" class="absolute inset-0 flex items-center justify-center bg-white/50 z-20">
                     <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800"></div>
                 </div>
                 <div id="echarts-container" class="w-full h-full"></div>
                 
-                <!-- Empty State -->
                 <div v-if="!chartLoading && isChartEmpty" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 pointer-events-none">
                     <svg class="w-12 h-12 mb-2 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
                     <p class="text-sm">暂无统计数据 (等待整点更新)</p>
@@ -237,7 +229,6 @@
         </div>
     </div>
 
-    <!-- Critical Error Modal -->
     <div v-if="criticalError" class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-red-50/50 backdrop-blur-sm">
         <div class="glass-panel w-full max-w-md p-8 rounded-[40px] shadow-xl border-red-200 bg-red-50/80">
             <div class="text-center">
@@ -258,7 +249,6 @@
         </div>
     </div>
 
-    <!-- Login Modal -->
     <div v-if="showLoginModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-gray-200/30 backdrop-blur-md" @click="showLoginModal = false"></div>
         <div class="glass-panel w-full max-w-md p-8 rounded-[40px] relative z-10 transform transition-all shadow-2xl">
@@ -269,9 +259,7 @@
         </div>
     </div>
 
-    <!-- Setup Wizard -->
     <div v-if="!initialized && !loadingCheckInit && !criticalError" class="fixed inset-0 z-50 flex flex-col items-center justify-center p-6 bg-[#F2F2F7]">
-        <!-- ... (Setup Wizard content remains same) ... -->
         <div class="glass-panel w-full max-w-lg p-10 rounded-[48px] shadow-2xl border border-white/80">
             <div class="text-center mb-8">
                 <h1 class="text-3xl font-extrabold text-[#1C1C1E] mb-2">欢迎使用 CDT Monitor</h1>
@@ -301,7 +289,6 @@
         </div>
     </div>
 
-    <!-- Admin Config Editor -->
     <div v-if="isAdmin && config" class="w-full max-w-5xl mt-12 mb-20 animate-fade-in-up space-y-8">
         <div class="flex items-center gap-4">
             <h2 class="text-xl font-bold">系统配置</h2>
@@ -309,9 +296,7 @@
         </div>
         
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Left Column -->
             <div class="lg:col-span-1 space-y-8">
-                <!-- Global Settings -->
                 <div class="glass-panel rounded-[32px] p-6 overflow-visible z-20"> 
                     <h3 class="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4">全局设置</h3>
                     <div class="space-y-4">
@@ -324,7 +309,6 @@
                             <input v-model.number="config.traffic_threshold" type="number" min="1" max="100" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
                         </div>
                         
-                        <!-- 接口调用频率 -->
                         <div class="space-y-1">
                             <label class="text-xs font-medium text-gray-500 ml-2">接口调用频率</label>
                             <select v-model.number="config.api_interval" class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none cursor-pointer">
@@ -337,7 +321,6 @@
                             <p class="text-[10px] text-gray-400 px-2 mt-1">控制更新状态和流量的频率。开关机操作触发时会自动加速至 1 分钟。</p>
                         </div>
 
-                        <!-- 停机模式 (带 Tooltip) -->
                         <div class="space-y-1 relative">
                             <div class="flex items-center gap-1">
                                 <label class="text-xs font-medium text-gray-500 ml-2">停机模式</label>
@@ -375,11 +358,9 @@
                             </select>
                         </div>
 
-                        <!-- 实例保活 (新增) -->
                         <div class="flex items-center justify-between pt-2">
                             <div class="flex items-center gap-1">
                                 <label class="text-xs font-medium text-gray-500 ml-2">实例保活 (抢占式)</label>
-                                <!-- Tooltip Trigger -->
                                 <div class="group relative flex items-center">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 text-gray-400 cursor-help hover:text-gray-600 transition-colors">
                                       <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
@@ -408,7 +389,6 @@
                     </div>
                 </div>
 
-                <!-- Notification Settings -->
                 <div class="glass-panel rounded-[32px] p-6 z-10">
                     <h3 class="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4">邮件服务器配置</h3>
                     <div class="space-y-3">
@@ -452,7 +432,6 @@
                 </div>
             </div>
 
-            <!-- Right Column (Accounts) -->
             <div class="lg:col-span-2 space-y-8">
                 <div class="glass-panel rounded-[40px] p-8 h-fit z-0">
                     <div class="space-y-8">
@@ -536,26 +515,49 @@
                     </div>
                 </div>
 
-                <!-- System Logs (New) -->
                 <div class="glass-panel rounded-[40px] p-8 relative overflow-hidden">
-                    <h3 class="text-lg font-bold mb-6 text-[#1C1C1E] flex items-center justify-between">
-                        系统执行日志
-                        <button @click="fetchLogs" class="text-xs font-normal text-blue-500 hover:text-blue-600 transition">刷新日志</button>
-                    </h3>
-                    <div class="overflow-y-auto max-h-96 pr-2 no-scrollbar">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-4">
+                            <h3 class="text-lg font-bold text-[#1C1C1E]">系统日志</h3>
+                            <div class="flex bg-gray-100/80 p-1 rounded-xl">
+                                <button @click="currentLogTab = 'action'; fetchLogs()" 
+                                        class="px-4 py-1.5 text-xs font-bold rounded-lg transition-all"
+                                        :class="currentLogTab === 'action' ? 'bg-white text-[#1C1C1E] shadow-sm' : 'text-gray-400 hover:text-gray-600'">
+                                    动作日志
+                                </button>
+                                <button @click="currentLogTab = 'heartbeat'; fetchLogs()" 
+                                        class="px-4 py-1.5 text-xs font-bold rounded-lg transition-all"
+                                        :class="currentLogTab === 'heartbeat' ? 'bg-white text-[#1C1C1E] shadow-sm' : 'text-gray-400 hover:text-gray-600'">
+                                    心跳日志
+                                </button>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <div v-if="logAutoRefresh" class="flex items-center gap-1.5">
+                                <span class="relative flex h-2 w-2">
+                                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                  <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                </span>
+                                <span class="text-[10px] text-gray-400 font-mono">LIVE</span>
+                            </div>
+                            <button @click="clearLogs" class="text-xs text-red-400 hover:text-red-500 font-medium transition px-2">清空</button>
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-y-auto max-h-96 pr-2 no-scrollbar bg-white/30 rounded-2xl border border-white/40">
                         <table class="w-full text-left border-collapse">
-                            <thead>
+                            <thead class="bg-gray-50/50 sticky top-0 backdrop-blur-md">
                                 <tr>
-                                    <th class="text-xs font-bold text-gray-400 uppercase tracking-wider pb-3 pl-2">时间</th>
-                                    <th class="text-xs font-bold text-gray-400 uppercase tracking-wider pb-3">类型</th>
-                                    <th class="text-xs font-bold text-gray-400 uppercase tracking-wider pb-3">内容</th>
+                                    <th class="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-3 pl-4">时间</th>
+                                    <th v-if="currentLogTab === 'action'" class="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-3">类型</th>
+                                    <th class="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-3 pr-4">内容</th>
                                 </tr>
                             </thead>
-                            <tbody class="text-sm text-gray-600">
-                                <tr v-for="(log, i) in systemLogs" :key="i" class="border-t border-gray-100/50 hover:bg-white/40 transition-colors">
-                                    <td class="py-3 pl-2 text-gray-500 font-mono text-xs whitespace-nowrap">{{ log.time_str }}</td>
-                                    <td class="py-3">
-                                        <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide" 
+                            <tbody class="text-xs text-gray-600">
+                                <tr v-for="(log, i) in systemLogs" :key="i" class="border-b border-gray-100/50 hover:bg-white/60 transition-colors last:border-0">
+                                    <td class="py-3 pl-4 text-gray-400 font-mono whitespace-nowrap w-40">{{ log.time_str }}</td>
+                                    <td v-if="currentLogTab === 'action'" class="py-3 w-20">
+                                        <span class="px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide" 
                                               :class="{
                                                   'bg-blue-100 text-blue-700': log.type === 'info',
                                                   'bg-yellow-100 text-yellow-700': log.type === 'warning',
@@ -564,10 +566,15 @@
                                             {{ log.type }}
                                         </span>
                                     </td>
-                                    <td class="py-3 pr-2">{{ log.message }}</td>
+                                    <td class="py-3 pr-4 font-mono leading-relaxed break-all" 
+                                        :class="{'text-gray-400': currentLogTab === 'heartbeat'}">
+                                        {{ log.message }}
+                                    </td>
                                 </tr>
                                 <tr v-if="systemLogs.length === 0">
-                                    <td colspan="3" class="py-8 text-center text-gray-400 text-xs">暂无日志记录</td>
+                                    <td colspan="3" class="py-12 text-center text-gray-400">
+                                        暂无{{ currentLogTab === 'action' ? '动作' : '心跳' }}记录
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>
@@ -580,7 +587,7 @@
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 <script>
-    const { createApp, ref, onMounted, computed } = Vue;
+    const { createApp, ref, onMounted, onUnmounted, computed } = Vue;
 
     createApp({
         setup() {
@@ -598,19 +605,25 @@
             const loadingCheckInit = ref(true);
             const regionSearchFocus = ref(-1); 
             const refreshingMap = ref({});
+            
+            // 日志相关
             const systemLogs = ref([]); 
+            const currentLogTab = ref('action');
+            const logAutoRefresh = ref(false);
+            let logInterval = null;
+
             const cronWarning = ref(false); 
 
             // 图表相关
             const showChartModal = ref(false);
             const chartLoading = ref(false);
-            const chartMode = ref('24h'); // 默认为24小时
+            const chartMode = ref('24h');
             const currentChartId = ref(0);
             const currentChartAccount = ref('');
             let chartInstance = null;
             let currentChartData = {}; 
 
-            // 阿里云地域数据 (...省略...)
+            // 阿里云地域数据
             const aliyunRegions = [
                 { id: 'cn-hongkong', name: '中国香港' },
                 { id: 'ap-southeast-1', name: '新加坡' },
@@ -652,8 +665,6 @@
                 Accounts: []
             });
 
-            // ... (checkInitStatus, performSetup, checkLoginStatus remain same) ...
-            
             const checkInitStatus = async () => {
                 loadingCheckInit.value = true;
                 try {
@@ -708,7 +719,7 @@
                     if (data.logged_in) {
                         isAdmin.value = true;
                         fetchConfig(); 
-                        fetchLogs(); 
+                        startLogPolling(); // 登录后开始轮询日志
                     }
                     fetchData();
                 } catch (e) {
@@ -719,7 +730,6 @@
             };
 
             const fetchData = async () => {
-                // 首次加载才显示全局 loading
                 if (statusData.value.length === 0) loading.value = true;
                 try {
                     const res = await fetch('index.php?action=get_status');
@@ -729,16 +739,11 @@
                         criticalError.value = json.error;
                     } else {
                         statusData.value = json.data || [];
-                        
-                        // 检查心跳
                         if (json.system_last_run) {
                             const now = Math.floor(Date.now() / 1000);
                             const diff = now - json.system_last_run;
-                            // 改为 180 秒 (3分钟)
                             cronWarning.value = diff > 180;
                         } else {
-                             // 如果从来没运行过，也视为异常 (初始化阶段除外，这里简化判断)
-                             // 如果有数据但没心跳记录，说明可能是旧版升级上来第一次运行
                              if (statusData.value.length > 0) cronWarning.value = true;
                         }
                     }
@@ -760,8 +765,6 @@
                     const data = await res.json();
                     if (data.success) {
                         await fetchData(); 
-                    } else {
-                        console.error('Refresh failed');
                     }
                 } catch (e) {
                     console.error(e);
@@ -776,14 +779,13 @@
                 chartLoading.value = true;
                 currentChartId.value = id;
                 currentChartAccount.value = accountName;
-                chartMode.value = '24h'; // 默认24小时
+                chartMode.value = '24h'; 
 
                 try {
                     const res = await fetch(`index.php?action=get_history&id=${id}`);
                     const json = await res.json();
                     currentChartData = json.data || {};
                     
-                    // 等待 DOM 渲染后初始化图表
                     setTimeout(() => {
                         initChart();
                         renderChart();
@@ -825,7 +827,6 @@
                 let sData = [];
                 let is30d = chartMode.value === '30d';
 
-                // 数据映射
                 if (is30d) {
                     if (currentChartData.history_30d) {
                         xData = currentChartData.history_30d.map(i => i.date);
@@ -843,7 +844,6 @@
                     return;
                 }
 
-                // ECharts 配置
                 const option = {
                     tooltip: {
                         trigger: 'axis',
@@ -861,7 +861,7 @@
                     },
                     xAxis: {
                         type: 'category',
-                        boundaryGap: is30d, // 30天柱状图留间隙，24h折线图不留
+                        boundaryGap: is30d, 
                         data: xData,
                         axisLine: { lineStyle: { color: '#E5E7EB' } },
                         axisLabel: { color: '#6B7280', fontSize: 11 },
@@ -878,7 +878,7 @@
                         data: sData,
                         type: is30d ? 'bar' : 'line',
                         smooth: true,
-                        barMaxWidth: 30, // 限制柱状图最大宽度
+                        barMaxWidth: 30,
                         itemStyle: { 
                             color: is30d ? new echarts.graphic.LinearGradient(0, 0, 0, 1, [
                                 { offset: 0, color: '#1C1C1E' },
@@ -897,12 +897,12 @@
                                 { offset: 1, color: 'rgba(0,122,255,0.0)' }
                             ])
                         },
-                        showSymbol: !is30d, // 折线图显示点
+                        showSymbol: !is30d,
                         symbolSize: 6
                     }]
                 };
 
-                chartInstance.setOption(option, true); // true = 不合并配置，彻底重绘
+                chartInstance.setOption(option, true);
             };
 
             const closeChart = () => {
@@ -919,6 +919,7 @@
                         isAdmin.value = false;
                         config.value = null;
                         systemLogs.value = []; 
+                        stopLogPolling();
                     });
                 } else {
                     showLoginModal.value = true;
@@ -937,9 +938,8 @@
                         showLoginModal.value = false;
                         passwordInput.value = '';
                         fetchConfig();
-                        fetchLogs(); 
+                        startLogPolling();
                     } else {
-                        // 修复：显示后端返回的具体错误信息，而不是硬编码的“密码错误”
                         alert(data.message || '登录失败'); 
                     }
                 } catch(e) {
@@ -970,16 +970,46 @@
                 } catch(e) { alert('保存请求失败'); }
             };
 
-            // 新增：获取系统日志
+            // 获取系统日志 (带Tab参数)
             const fetchLogs = async () => {
                 if (!isAdmin.value) return;
                 try {
-                    const res = await fetch('index.php?action=get_logs');
+                    const res = await fetch(`index.php?action=get_logs&tab=${currentLogTab.value}`);
                     const data = await res.json();
                     if (data.data) {
                         systemLogs.value = data.data;
                     }
                 } catch (e) { console.error('Fetch logs failed', e); }
+            };
+            
+            // 清空日志
+            const clearLogs = async () => {
+                if(!confirm(`确定清空"${currentLogTab.value === 'action' ? '动作' : '心跳'}"日志吗？`)) return;
+                try {
+                    const res = await fetch('index.php?action=clear_logs', {
+                        method: 'POST',
+                        body: JSON.stringify({ tab: currentLogTab.value })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        fetchLogs();
+                    }
+                } catch (e) { console.error(e); }
+            };
+            
+            const startLogPolling = () => {
+                fetchLogs(); // 立即执行一次
+                logAutoRefresh.value = true;
+                if (logInterval) clearInterval(logInterval);
+                logInterval = setInterval(fetchLogs, 3000); // 3秒刷新一次
+            };
+            
+            const stopLogPolling = () => {
+                logAutoRefresh.value = false;
+                if (logInterval) {
+                    clearInterval(logInterval);
+                    logInterval = null;
+                }
             };
 
             const sendTestEmail = async () => {
@@ -1008,12 +1038,17 @@
             onMounted(() => {
                 checkInitStatus();
             });
+            
+            onUnmounted(() => {
+                stopLogPolling();
+            });
 
             return {
                 statusData, loading, isAdmin, checkingLogin, showLoginModal, passwordInput, config, initialized, loadingCheckInit, setupData, criticalError,
                 regionSearchFocus, aliyunRegions, refreshingMap, systemLogs, cronWarning,
                 showChartModal, chartLoading, chartMode, currentChartAccount, openChart, closeChart, switchChartMode, isChartEmpty,
-                toggleAdmin, performLogin, saveConfig, sendTestEmail, sendingEmail, addAccount, removeAccount, getInstanceStatusColor, performSetup, refreshSingle, fetchLogs
+                toggleAdmin, performLogin, saveConfig, sendTestEmail, sendingEmail, addAccount, removeAccount, getInstanceStatusColor, performSetup, refreshSingle, fetchLogs,
+                currentLogTab, clearLogs, logAutoRefresh
             };
         }
     }).mount('#app');

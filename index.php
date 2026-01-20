@@ -118,14 +118,26 @@ if ($action === 'refresh_account') {
     exit;
 }
 
-// 获取系统日志
+// 修改：获取系统日志，支持 Tab
 if ($action === 'get_logs') {
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['data' => $app->getSystemLogs()]);
+    $tab = $_GET['tab'] ?? 'action'; // 默认是动作日志
+    echo json_encode(['data' => $app->getSystemLogs($tab)]);
     exit;
 }
 
-// 新增：获取流量历史
+// 新增：清空日志
+if ($action === 'clear_logs') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    $tab = $data['tab'] ?? 'action';
+    if ($app->clearSystemLogs($tab)) {
+        echo json_encode(['success' => true]);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Clear failed']);
+    }
+    exit;
+}
+
 if ($action === 'get_history') {
     header('Content-Type: application/json; charset=utf-8');
     $id = $_GET['id'] ?? 0;
