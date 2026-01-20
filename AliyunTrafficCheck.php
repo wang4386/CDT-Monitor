@@ -149,60 +149,40 @@ class AliyunTrafficCheck
         return $logs;
     }
 
-    // --- 新增：获取流量历史数据 ---
+    // --- 修改：获取流量历史数据（适配新表结构） ---
     public function getAccountHistory($id)
     {
         if ($this->initError) return [];
         
-        // 1. 通过 ID 查找账号，获取 AccessKeyId
         $account = $this->configManager->getAccountById($id);
         if (!$account) return ['error' => 'Account not found'];
 
         $ak = $account['access_key_id'];
 
-        // 2. 获取过去 30 天的数据
-        $startTime = time() - (30 * 86400);
-        $rawHistory = $this->db->getTrafficHistory($ak, $startTime);
-
-        // 3. 处理数据
-        $chart24h = [];
-        $chart30d = [];
-        
-        $last24hTime = time() - (24 * 3600);
-        
-        // 用于30天聚合 (key: Y-m-d, value: max_traffic)
-        $dailyData = []; 
-
-        foreach ($rawHistory as $row) {
-            $time = $row['recorded_at'];
-            $traffic = round($row['traffic'], 3);
-            
-            // 24小时数据：直接添加所有点（或者稍微抽样，ECharts处理几千个点没问题）
-            if ($time >= $last24hTime) {
-                $chart24h[] = [
-                    'time' => date('H:i', $time), 
-                    'full_time' => date('Y-m-d H:i', $time),
-                    'value' => $traffic
-                ];
-            }
-
-            // 30天数据：按天聚合取最大值（因为CDT流量是累积的，每天的最大值即为当天最终使用量）
-            $day = date('Y-m-d', $time);
-            if (!isset($dailyData[$day])) {
-                $dailyData[$day] = $traffic;
-            } else {
-                $dailyData[$day] = max($dailyData[$day], $traffic);
-            }
+        // 1. 获取最近24小时数据 (Hourly)
+        $rawHourly = $this->db->getHourlyStats($ak);
+        $chartHourly = [];
+        foreach ($rawHourly as $row) {
+            $chartHourly[] = [
+                'time' => date('H:00', $row['recorded_at']),
+                'full_time' => date('Y-m-d H:i', $row['recorded_at']),
+                'value' => round($row['traffic'], 3)
+            ];
         }
 
-        // 格式化 30 天数据
-        foreach ($dailyData as $date => $val) {
-            $chart30d[] = ['date' => $date, 'value' => $val];
+        // 2. 获取最近30天数据 (Daily)
+        $rawDaily = $this->db->getDailyStats($ak);
+        $chartDaily = [];
+        foreach ($rawDaily as $row) {
+            $chartDaily[] = [
+                'date' => date('Y-m-d', $row['recorded_at']),
+                'value' => round($row['traffic'], 3)
+            ];
         }
 
         return [
-            'history_24h' => $chart24h,
-            'history_30d' => $chart30d
+            'history_24h' => $chartHourly,
+            'history_30d' => $chartDaily
         ];
     }
 
@@ -213,7 +193,7 @@ class AliyunTrafficCheck
         if ($this->initError) return "Error: " . $this->initError;
         
         $this->db->pruneLogs(30);
-        $this->db->pruneTrafficHistory(31); // 自动清理超过31天的历史数据
+        $this->db->pruneStats(); // 清理旧的统计数据
 
         $logs = [];
         $currentUserTime = date('H:i');
@@ -268,6 +248,19 @@ class AliyunTrafficCheck
             $currentInterval = ($isTransientState || $statusTransformed) ? 60 : $userInterval;
 
             $shouldCheckApi = $forceRefresh || (($currentTime - $lastUpdate) > $currentInterval);
+            
+            // 特殊检查：是否需要记录统计数据？
+            // 策略：Monitor每分钟运行，尝试插入当前整点和当前0点的数据。
+            // 由于数据库有 UNIQUE 索引 + INSERT OR IGNORE，只有每小时/每天第一次尝试会成功。
+            // 因此，我们不需要复杂的“是否已记录”判断，直接尝试记录即可。
+            // 但为了减少API调用，我们仅在“应该检查API”或者“尚未记录当前小时/天数据”时才调用API？
+            // 简单起见，利用现有的 $shouldCheckApi 逻辑。
+            // 如果为了保证整点记录的及时性，我们应该每分钟都检查一下是否到了整点？
+            // 优化：如果当前分钟是 00 (整点)，则强制刷新一次，确保整点数据最准确。
+            if (date('i') === '00') {
+                $shouldCheckApi = true;
+            }
+
             $newUpdateTime = $currentTime;
 
             if ($shouldCheckApi) {
@@ -288,8 +281,11 @@ class AliyunTrafficCheck
                     $traffic = $newTraffic;
                     $apiStatusLog = "已更新";
                     
-                    // [新增] 成功获取流量后，记录历史数据 (绑定到 AccessKeyId)
-                    $this->db->addTrafficHistory($account['access_key_id'], $traffic);
+                    // --- 修改：记录统计数据 ---
+                    // 尝试记录小时数据 (利用DB唯一性去重)
+                    $this->db->addHourlyStat($account['access_key_id'], $traffic);
+                    // 尝试记录天数据 (利用DB唯一性去重)
+                    $this->db->addDailyStat($account['access_key_id'], $traffic);
                 }
                 
                 if ($status === 'Unknown') {
@@ -411,8 +407,9 @@ class AliyunTrafficCheck
                     $newUpdateTime = $lastUpdate;
                 } else {
                     $traffic = $newTraffic;
-                    // [新增] 只有在真正调用API更新了数据时，才记录历史
-                    $this->db->addTrafficHistory($account['access_key_id'], $traffic);
+                    // --- 修改：同时尝试记录统计数据 ---
+                    $this->db->addHourlyStat($account['access_key_id'], $traffic);
+                    $this->db->addDailyStat($account['access_key_id'], $traffic);
                 }
                 
                 if ($status === 'Unknown') {
@@ -463,8 +460,9 @@ class AliyunTrafficCheck
         if ($traffic < 0) {
             $traffic = $targetAccount['traffic_used']; 
         } else {
-            // [新增] 手动刷新也记录历史
-            $this->db->addTrafficHistory($targetAccount['access_key_id'], $traffic);
+            // 手动刷新也尝试记录统计数据
+            $this->db->addHourlyStat($targetAccount['access_key_id'], $traffic);
+            $this->db->addDailyStat($targetAccount['access_key_id'], $traffic);
         }
 
         return $this->configManager->updateAccountStatus($id, $traffic, $status, $currentTime);
