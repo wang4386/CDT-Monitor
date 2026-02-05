@@ -41,7 +41,8 @@ class ConfigManager
     public function getAccountById($id)
     {
         foreach ($this->accountsCache as $acc) {
-            if ($acc['id'] == $id) return $acc;
+            if ($acc['id'] == $id)
+                return $acc;
         }
         return null;
     }
@@ -59,7 +60,7 @@ class ConfigManager
     }
 
     // --- 新增：心跳时间管理 ---
-    
+
     public function updateLastRunTime($time)
     {
         $this->saveSetting('last_monitor_run', $time);
@@ -67,7 +68,7 @@ class ConfigManager
 
     public function getLastRunTime()
     {
-        return (int)($this->configCache['last_monitor_run'] ?? 0);
+        return (int) ($this->configCache['last_monitor_run'] ?? 0);
     }
 
     // ------------------------
@@ -85,7 +86,7 @@ class ConfigManager
             $this->saveSetting('threshold_action', $data['threshold_action']);
             $this->saveSetting('keep_alive', isset($data['keep_alive']) && $data['keep_alive'] ? '1' : '0');
             $this->saveSetting('api_interval', $data['api_interval'] ?? 600);
-            
+
             if (isset($data['Notification'])) {
                 $this->saveSetting('notify_email', $data['Notification']['email']);
                 $this->saveSetting('notify_host', $data['Notification']['host']);
@@ -97,26 +98,36 @@ class ConfigManager
 
             // 2. 账号增量同步
             $newAccounts = $data['Accounts'] ?? [];
-            $stmt = $this->db->query("SELECT id, access_key_id FROM accounts");
-            $existingMap = []; 
+            $stmt = $this->db->query("SELECT id, access_key_id, region_id, instance_id FROM accounts");
+            $existingMap = [];
             while ($row = $stmt->fetch()) {
-                $existingMap[$row['access_key_id']] = $row['id'];
+                // Use composite key for deduplication: AK + Region + InstanceID
+                $compositeKey = $row['access_key_id'] . '|' . $row['region_id'] . '|' . ($row['instance_id'] ?? '');
+                $existingMap[$compositeKey] = $row['id'];
             }
-            
+
             $keptIds = [];
             $insertStmt = $this->db->prepare("INSERT INTO accounts (access_key_id, access_key_secret, region_id, instance_id, max_traffic, schedule_enabled, start_time, stop_time, traffic_used, instance_status, updated_at, last_keep_alive_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'Unknown', 0, 0)");
             $updateStmt = $this->db->prepare("UPDATE accounts SET access_key_secret = ?, region_id = ?, instance_id = ?, max_traffic = ?, schedule_enabled = ?, start_time = ?, stop_time = ? WHERE id = ?");
 
             foreach ($newAccounts as $acc) {
                 $key = $acc['AccessKeyId'];
+                $region = $acc['regionId'];
+                $instance = $acc['instanceId'] ?? '';
+                $compositeKey = $key . '|' . $region . '|' . $instance;
+
                 $params = [
-                    $acc['AccessKeySecret'], $acc['regionId'], $acc['instanceId'] ?? '', $acc['maxTraffic'],
+                    $acc['AccessKeySecret'],
+                    $region,
+                    $instance,
+                    $acc['maxTraffic'],
                     ($acc['schedule']['enabled'] ?? false) ? 1 : 0,
-                    $acc['schedule']['startTime'] ?? '', $acc['schedule']['stopTime'] ?? ''
+                    $acc['schedule']['startTime'] ?? '',
+                    $acc['schedule']['stopTime'] ?? ''
                 ];
 
-                if (isset($existingMap[$key])) {
-                    $id = $existingMap[$key];
+                if (isset($existingMap[$compositeKey])) {
+                    $id = $existingMap[$compositeKey];
                     $params[] = $id;
                     $updateStmt->execute($params);
                     $keptIds[] = $id;
@@ -124,6 +135,12 @@ class ConfigManager
                     $insertParams = [$key];
                     array_push($insertParams, ...$params);
                     $insertStmt->execute($insertParams);
+                    // For new inserts, we need to track the ID to avoid deleting it if user sends duplicate valid entries in one request? 
+                    // But assume frontend sends unique list. If not, this logic might add duplicates. 
+                    // Ideally we should track inserted IDs too but here we just rely on existingMap keys.
+                    // Actually, if we just inserted, we can't easily get the ID back without lastInsertId but we don't strictly need it for the delete logic below if we assume input list is unique.
+                    // However, to be safe against deleting effectively "new" accounts just added, let's just trust input list defines the "desired state".
+                    // Wait, $idsToDelete is calculated from existingMap vs keptIds. If it's a new insert, it wasn't in existingMap, so it won't be in idsToDelete anyway.
                 }
             }
 
@@ -132,11 +149,11 @@ class ConfigManager
             if (!empty($idsToDelete)) {
                 $placeholders = implode(',', array_fill(0, count($idsToDelete), '?'));
                 $deleteStmt = $this->db->prepare("DELETE FROM accounts WHERE id IN ($placeholders)");
-                $deleteStmt->execute($idsToDelete);
+                $deleteStmt->execute(array_values($idsToDelete));
             }
 
             $this->db->commit();
-            
+
             // 4. 重排 ID
             $this->reorderIds();
 
@@ -144,7 +161,8 @@ class ConfigManager
             $this->load();
             return true;
         } catch (Exception $e) {
-            if ($this->db->inTransaction()) $this->db->rollBack();
+            if ($this->db->inTransaction())
+                $this->db->rollBack();
             return false;
         }
     }
@@ -159,22 +177,32 @@ class ConfigManager
             if (!empty($rows)) {
                 $this->db->exec("DELETE FROM accounts");
                 $this->db->exec("DELETE FROM sqlite_sequence WHERE name='accounts'");
-                
+
                 $insertStmt = $this->db->prepare("INSERT INTO accounts (id, access_key_id, access_key_secret, region_id, instance_id, max_traffic, schedule_enabled, start_time, stop_time, traffic_used, instance_status, updated_at, last_keep_alive_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                
+
                 $newId = 1;
                 foreach ($rows as $row) {
                     $insertStmt->execute([
-                        $newId++, $row['access_key_id'], $row['access_key_secret'], $row['region_id'],
-                        $row['instance_id'], $row['max_traffic'], $row['schedule_enabled'],
-                        $row['start_time'], $row['stop_time'], $row['traffic_used'],
-                        $row['instance_status'], $row['updated_at'], $row['last_keep_alive_at']
+                        $newId++,
+                        $row['access_key_id'],
+                        $row['access_key_secret'],
+                        $row['region_id'],
+                        $row['instance_id'],
+                        $row['max_traffic'],
+                        $row['schedule_enabled'],
+                        $row['start_time'],
+                        $row['stop_time'],
+                        $row['traffic_used'],
+                        $row['instance_status'],
+                        $row['updated_at'],
+                        $row['last_keep_alive_at']
                     ]);
                 }
             }
             $this->db->commit();
         } catch (Exception $e) {
-            if ($this->db->inTransaction()) $this->db->rollBack();
+            if ($this->db->inTransaction())
+                $this->db->rollBack();
         }
     }
 

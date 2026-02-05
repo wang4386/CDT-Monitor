@@ -62,12 +62,12 @@ class AliyunService
     {
         // 优化点2: 基础等待时间从 0.5s 提升至 1s
         // 序列变为: 1s, 2s, 4s... 3次重试总耗时控制在合理范围内
-        $base = 1000000 * pow(2, $attempt); 
+        $base = 1000000 * pow(2, $attempt);
         if ($isThrottling) {
             $base *= 2; // 流控时等待时间翻倍
         }
         // 增加随机抖动，避免多线程/多容器并发请求撞车
-        $jitter = rand(0, 500000); 
+        $jitter = rand(0, 500000);
         usleep($base + $jitter);
     }
 
@@ -106,7 +106,7 @@ class AliyunService
                 AlibabaCloud::accessKeyClient($key, $secret)
                     ->regionId('cn-hongkong') // CDT 接口通常用 cn-hongkong 或 cn-hangzhou 调用即可获取全局数据
                     ->asDefaultClient();
-                
+
                 return AlibabaCloud::rpc()
                     ->product('CDT')
                     ->scheme('https')
@@ -120,7 +120,7 @@ class AliyunService
                     ])
                     ->request();
             }, 'getTraffic');
-            
+
             // 写入缓存
             $this->trafficCache[$cacheKey] = $result;
         }
@@ -132,7 +132,7 @@ class AliyunService
             foreach ($result['TrafficDetails'] as $detail) {
                 // 核心逻辑：区分国内/海外
                 // 只有当流量产生区域的属性（国内/海外）与目标实例区域属性一致时，才计入
-                $trafficRegion = $detail['RegionId'] ?? '';
+                $trafficRegion = $detail['BusinessRegionId'] ?? '';
                 if ($this->isOverseas($trafficRegion) === $isTargetOverseas) {
                     $totalTraffic += $detail['Traffic'];
                 }
@@ -140,7 +140,7 @@ class AliyunService
 
             return $totalTraffic / (1024 * 1024 * 1024);
         }
-        
+
         throw new \Exception("API 响应缺少 TrafficDetails 字段");
     }
 
@@ -154,18 +154,18 @@ class AliyunService
             AlibabaCloud::accessKeyClient($account['access_key_id'], $account['access_key_secret'])
                 ->regionId($account['region_id'])
                 ->asDefaultClient();
-            
+
             $options = [
                 'query' => ['RegionId' => $account['region_id']],
                 // 优化点3: 同样缩短实例状态查询的超时
                 'connect_timeout' => 5.0,
                 'timeout' => 10.0
             ];
-            
+
             if (!empty($account['instance_id'])) {
                 $options['query']['InstanceId'] = $account['instance_id'];
             }
-            
+
             $result = AlibabaCloud::rpc()
                 ->product('Ecs')
                 ->scheme('https')
@@ -175,11 +175,11 @@ class AliyunService
                 ->host("ecs.{$account['region_id']}.aliyuncs.com")
                 ->options($options)
                 ->request();
-            
+
             if (isset($result['InstanceStatuses']['InstanceStatus'][0]['Status'])) {
                 return $result['InstanceStatuses']['InstanceStatus'][0]['Status'];
             }
-            
+
             throw new \Exception("API 响应未找到实例状态 (请检查 Instance ID)");
         }, 'getInstanceStatus');
     }
@@ -194,25 +194,25 @@ class AliyunService
             AlibabaCloud::accessKeyClient($account['access_key_id'], $account['access_key_secret'])
                 ->regionId($account['region_id'])
                 ->asDefaultClient();
-            
+
             if (empty($account['instance_id'])) {
                 throw new \Exception("未配置 Instance ID");
             }
-            
+
             $options = [
                 'query' => [
-                    'RegionId' => $account['region_id'], 
+                    'RegionId' => $account['region_id'],
                     'InstanceId' => $account['instance_id']
                 ],
                 // 优化点4: 控制操作保持一致，确保用户操作不卡死
-                'connect_timeout' => 5.0, 
+                'connect_timeout' => 5.0,
                 'timeout' => 10.0
             ];
-            
+
             if ($action === 'stop') {
                 $options['query']['StoppedMode'] = $shutdownMode;
             }
-            
+
             AlibabaCloud::rpc()
                 ->product('Ecs')
                 ->scheme('https')
@@ -222,7 +222,7 @@ class AliyunService
                 ->host("ecs.{$account['region_id']}.aliyuncs.com")
                 ->options($options)
                 ->request();
-            
+
             return true;
         }, 'controlInstance');
     }

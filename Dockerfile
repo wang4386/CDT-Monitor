@@ -22,11 +22,11 @@ FROM php:8.2-fpm-alpine
 # 设置镜像元数据
 LABEL maintainer="CDT-Monitor-Docker"
 
-# 设置环境变量：默认时区
+# 设置环境变量
 ENV TZ=Asia/Shanghai
 
-# 1. 安装运行时系统依赖 (运行 Nginx, SQLite, Cron 必需)
-# 2. 安装构建依赖 (编译 PHP 扩展必需，编译后会删除)
+# 安装系统依赖、编译 PHP 扩展、清理依赖、配置时区
+# 将所有 RUN 指令合并以减少镜像层数
 RUN apk add --no-cache \
     nginx \
     dcron \
@@ -40,8 +40,6 @@ RUN apk add --no-cache \
     libxml2-dev \
     sqlite-dev \
     oniguruma-dev \
-    \
-    # 3. 安装 PHP 扩展
     && docker-php-ext-install \
     curl \
     pdo_sqlite \
@@ -50,39 +48,33 @@ RUN apk add --no-cache \
     xml \
     mbstring \
     opcache \
-    \
-    # 4. 配置系统时区 (关键修复)
-    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    # 配置系统时区
+    && cp /usr/share/zoneinfo/$TZ /etc/localtime \
     && echo $TZ > /etc/timezone \
-    \
-    # 5. 清理构建依赖和缓存，极大减小镜像体积
+    # 配置 PHP
+    && mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+    && sed -i "s/;date.timezone =/date.timezone = Asia\/Shanghai/g" "$PHP_INI_DIR/php.ini" \
+    # 清理构建依赖和缓存
     && apk del .build-deps \
-    && rm -rf /var/cache/apk/*
-
-# 配置 PHP 推荐设置 (生产环境) 并修正 PHP 时区
-RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
-    && sed -i "s/;date.timezone =/date.timezone = Asia\/Shanghai/g" "$PHP_INI_DIR/php.ini"
+    && rm -rf /var/cache/apk/* \
+    # 预创建目录并修正权限
+    && mkdir -p /var/www/html/data \
+    && chown -R www-data:www-data /var/www/html \
+    # 配置 Cron (每分钟执行)
+    && echo "* * * * * /usr/local/bin/php /var/www/html/monitor.php >> /dev/null 2>&1" >> /etc/crontabs/www-data
 
 # 配置工作目录
 WORKDIR /var/www/html
 
-# 从 Builder 阶段复制项目文件 (包含 vendor)
-COPY --from=builder /app /var/www/html
-
-# 创建数据目录并修正权限
-RUN mkdir -p /var/www/html/data && \
-    chown -R www-data:www-data /var/www/html
-
-# 配置 Nginx
+# 复制 Nginx 配置 (利用缓存，变更频率低)
 COPY docker/nginx.conf /etc/nginx/http.d/default.conf
-
-# 配置 Cron 任务 (每分钟执行一次 monitor.php)
-# 将任务写入 www-data 用户的 crontab
-RUN echo "* * * * * /usr/local/bin/php /var/www/html/monitor.php >> /dev/null 2>&1" >> /etc/crontabs/www-data
 
 # 复制并配置启动脚本
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+# 最后复制项目代码 (变更频率高，放在最后)
+COPY --from=builder --chown=www-data:www-data /app /var/www/html
 
 # 暴露端口
 EXPOSE 80

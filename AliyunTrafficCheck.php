@@ -17,7 +17,7 @@ class AliyunTrafficCheck
     private $notificationService;
     private $initError = null;
 
-    const KEEP_ALIVE_COOLDOWN = 1800; 
+    const KEEP_ALIVE_COOLDOWN = 1800;
 
     public function __construct()
     {
@@ -26,10 +26,10 @@ class AliyunTrafficCheck
             $this->configManager = new ConfigManager($this->db);
             $this->aliyunService = new AliyunService();
             $this->notificationService = new NotificationService();
-            
+
             // 注入配置到通知服务
             $this->notificationService->setConfig($this->configManager->getAllSettings());
-            
+
         } catch (Exception $e) {
             $this->initError = $e->getMessage();
         }
@@ -42,7 +42,8 @@ class AliyunTrafficCheck
 
     public function isInitialized()
     {
-        if ($this->initError) return false;
+        if ($this->initError)
+            return false;
         return $this->configManager->isInitialized();
     }
 
@@ -66,9 +67,10 @@ class AliyunTrafficCheck
         }
 
         $adminPass = $this->getAdminPassword();
-        if (empty($adminPass)) return false;
+        if (empty($adminPass))
+            return false;
 
-        if (hash_equals((string)$adminPass, (string)$password)) {
+        if (hash_equals((string) $adminPass, (string) $password)) {
             $this->db->clearLoginAttempts($ip);
             $this->db->addLog('info', "管理员登录成功 [IP: {$ip}]");
             return true;
@@ -81,8 +83,10 @@ class AliyunTrafficCheck
 
     public function setup($data)
     {
-        if ($this->initError) throw new Exception($this->initError);
-        if ($this->isInitialized()) return false; 
+        if ($this->initError)
+            throw new Exception($this->initError);
+        if ($this->isInitialized())
+            return false;
         return $this->configManager->updateConfig($data);
     }
 
@@ -97,19 +101,20 @@ class AliyunTrafficCheck
 
     public function getConfigForFrontend()
     {
-        if ($this->initError) return [];
-        
+        if ($this->initError)
+            return [];
+
         $settings = $this->configManager->getAllSettings();
         $accounts = $this->configManager->getAccounts();
 
         $config = [
             'admin_password' => $settings['admin_password'] ?? '',
-            'traffic_threshold' => (int)($settings['traffic_threshold'] ?? 95),
+            'traffic_threshold' => (int) ($settings['traffic_threshold'] ?? 95),
             'enable_schedule_email' => ($settings['enable_schedule_email'] ?? '0') === '1',
             'shutdown_mode' => $settings['shutdown_mode'] ?? 'KeepCharging',
             'threshold_action' => $settings['threshold_action'] ?? 'stop_and_notify',
             'keep_alive' => ($settings['keep_alive'] ?? '0') === '1',
-            'api_interval' => (int)($settings['api_interval'] ?? 600), 
+            'api_interval' => (int) ($settings['api_interval'] ?? 600),
             'Notification' => [
                 'email' => $settings['notify_email'] ?? '',
                 'host' => $settings['notify_host'] ?? '',
@@ -127,7 +132,7 @@ class AliyunTrafficCheck
                 'AccessKeySecret' => $row['access_key_secret'],
                 'regionId' => $row['region_id'],
                 'instanceId' => $row['instance_id'],
-                'maxTraffic' => (float)$row['max_traffic'],
+                'maxTraffic' => (float) $row['max_traffic'],
                 'schedule' => [
                     'enabled' => $row['schedule_enabled'] == 1,
                     'startTime' => $row['start_time'],
@@ -142,7 +147,8 @@ class AliyunTrafficCheck
     // --- 修改：支持按 Tab 获取日志 ---
     public function getSystemLogs($tab = 'action')
     {
-        if ($this->initError) return [];
+        if ($this->initError)
+            return [];
 
         if ($tab === 'heartbeat') {
             // 心跳日志：只看 heartbeat 类型
@@ -153,7 +159,7 @@ class AliyunTrafficCheck
         }
 
         // 仅返回最近 20 条
-        $logs = $this->db->getLogsByTypes($types, 20); 
+        $logs = $this->db->getLogsByTypes($types, 20);
 
         foreach ($logs as &$log) {
             $log['time_str'] = date('Y-m-d H:i:s', $log['created_at']);
@@ -164,33 +170,38 @@ class AliyunTrafficCheck
     // --- 新增：清空日志并重排 ID ---
     public function clearSystemLogs($tab = 'action')
     {
-        if ($this->initError) return false;
-        
+        if ($this->initError)
+            return false;
+
         $result = false;
         if ($tab === 'heartbeat') {
             $result = $this->db->clearLogsByTypes(['heartbeat']);
         } else {
             $result = $this->db->clearLogsByTypes(['info', 'warning', 'error']);
         }
-        
+
         // 关键改动：清空后立即重排剩余 ID
         if ($result) {
             $this->db->reorderLogsIds();
         }
-        
+
         return $result;
     }
 
     public function getAccountHistory($id)
     {
-        if ($this->initError) return [];
-        
+        if ($this->initError)
+            return [];
+
         $account = $this->configManager->getAccountById($id);
-        if (!$account) return ['error' => 'Account not found'];
+        if (!$account)
+            return ['error' => 'Account not found'];
 
-        $ak = $account['access_key_id'];
+        if (!$account)
+            return ['error' => 'Account not found'];
 
-        $rawHourly = $this->db->getHourlyStats($ak);
+        // Use account ID for stats query
+        $rawHourly = $this->db->getHourlyStats($id);
         $chartHourly = [];
         foreach ($rawHourly as $row) {
             $chartHourly[] = [
@@ -200,7 +211,7 @@ class AliyunTrafficCheck
             ];
         }
 
-        $rawDaily = $this->db->getDailyStats($ak);
+        $rawDaily = $this->db->getDailyStats($id);
         $chartDaily = [];
         foreach ($rawDaily as $row) {
             $chartDaily[] = [
@@ -219,17 +230,18 @@ class AliyunTrafficCheck
 
     public function monitor()
     {
-        if ($this->initError) return "Error: " . $this->initError;
-        
+        if ($this->initError)
+            return "Error: " . $this->initError;
+
         // 优化：分级清理日志
         // 普通/重要日志保留 30 天，高频心跳日志仅保留 3 天
         $this->db->pruneLogs(30, 3);
-        
+
         // 关键改动：每次清理后重排 ID，保证 ID 永远紧凑
         $this->db->reorderLogsIds();
 
-        $this->db->pruneStats(); 
-        
+        $this->db->pruneStats();
+
         // 优化：每天凌晨 04:xx 执行一次 VACUUM 整理数据库碎片
         if (date('H') === '04' && date('i') === '00') {
             $this->db->vacuum();
@@ -238,20 +250,20 @@ class AliyunTrafficCheck
         $logs = [];
         $currentUserTime = date('H:i');
         $currentTime = time();
-        
-        $threshold = (int)$this->configManager->get('traffic_threshold', 95);
+
+        $threshold = (int) $this->configManager->get('traffic_threshold', 95);
         $shutdownMode = $this->configManager->get('shutdown_mode', 'KeepCharging');
         $thresholdAction = $this->configManager->get('threshold_action', 'stop_and_notify');
         $keepAlive = $this->configManager->get('keep_alive', '0') === '1';
-        $userInterval = (int)$this->configManager->get('api_interval', 600);
-        
+        $userInterval = (int) $this->configManager->get('api_interval', 600);
+
         $accounts = $this->configManager->getAccounts();
 
         foreach ($accounts as $account) {
             $logPrefix = "[{$account['access_key_id']}]";
             $actions = [];
             $forceRefresh = false;
-            $statusTransformed = false; 
+            $statusTransformed = false;
 
             // 1. 定时任务
             if ($account['schedule_enabled'] == 1) {
@@ -259,19 +271,19 @@ class AliyunTrafficCheck
                     if ($this->safeControlInstance($account, 'start')) {
                         $actions[] = "定时启动";
                         $this->db->addLog('info', "执行定时启动 [{$account['access_key_id']}]");
-                        
+
                         $mailRes = $this->notificationService->notifySchedule("定时启动", $account, "计划任务已触发，实例正在启动。");
                         $this->logMailResult($mailRes, $account['access_key_id']);
 
                         $forceRefresh = true;
-                        $statusTransformed = true; 
+                        $statusTransformed = true;
                     }
                 }
                 if ($account['stop_time'] && $currentUserTime === $account['stop_time']) {
                     if ($this->safeControlInstance($account, 'stop', $shutdownMode)) {
                         $actions[] = "定时停止({$shutdownMode})";
                         $this->db->addLog('info', "执行定时停止 [{$account['access_key_id']}]");
-                        
+
                         $mailRes = $this->notificationService->notifySchedule("定时停止", $account, "计划任务已触发，实例已停止。");
                         $this->logMailResult($mailRes, $account['access_key_id']);
 
@@ -288,7 +300,7 @@ class AliyunTrafficCheck
             $currentInterval = ($isTransientState || $statusTransformed) ? 60 : $userInterval;
 
             $shouldCheckApi = $forceRefresh || (($currentTime - $lastUpdate) > $currentInterval);
-            
+
             if (date('i') === '00') {
                 $shouldCheckApi = true;
             }
@@ -298,24 +310,24 @@ class AliyunTrafficCheck
             if ($shouldCheckApi) {
                 $newTraffic = $this->safeGetTraffic($account);
                 $status = $this->safeGetInstanceStatus($account);
-                
+
                 if ($status === 'Unknown') {
-                    usleep(500000); 
+                    usleep(500000);
                     $status = $this->safeGetInstanceStatus($account);
                 }
 
                 if ($newTraffic < 0) {
-                    $traffic = $account['traffic_used']; 
+                    $traffic = $account['traffic_used'];
                     $apiStatusLog = "流量API异常";
                     $newUpdateTime = $lastUpdate;
                 } else {
                     $traffic = $newTraffic;
                     $apiStatusLog = "已更新";
-                    
-                    $this->db->addHourlyStat($account['access_key_id'], $traffic);
-                    $this->db->addDailyStat($account['access_key_id'], $traffic);
+
+                    $this->db->addHourlyStat($account['id'], $traffic);
+                    $this->db->addDailyStat($account['id'], $traffic);
                 }
-                
+
                 if ($status === 'Unknown') {
                     $newUpdateTime = $lastUpdate;
                     $apiStatusLog .= "(状态Unknown)";
@@ -353,7 +365,7 @@ class AliyunTrafficCheck
                         $actions[] = "超限告警";
                         $this->db->addLog('warning', "流量超限触发告警 [{$account['access_key_id']}] 使用率:{$usagePercent}%");
                     }
-                    
+
                     $mailRes = $this->notificationService->sendTrafficWarning($account['access_key_id'], $traffic, $usagePercent, implode(',', $actions), $threshold);
                     $this->logMailResult($mailRes, $account['access_key_id']);
                 }
@@ -370,7 +382,7 @@ class AliyunTrafficCheck
                             if ($this->safeControlInstance($account, 'start')) {
                                 $actions[] = "保活启动";
                                 $this->db->addLog('info', "执行保活启动 [{$account['access_key_id']}]");
-                                
+
                                 $mailRes = $this->notificationService->notifySchedule("保活启动", $account, "检测到实例在工作时段非预期关机，已尝试自动启动。");
                                 $this->logMailResult($mailRes, $account['access_key_id']);
 
@@ -394,12 +406,12 @@ class AliyunTrafficCheck
 
             $actionLog = empty($actions) ? "无动作" : implode(", ", $actions);
             $logLine = sprintf("%s %s | %s | %s | %s", $logPrefix, $actionLog, $trafficDesc, $status, $apiStatusLog);
-            
+
             // --- 修改：将心跳日志写入数据库 ---
             $this->db->addLog('heartbeat', $logLine);
             $logs[] = $logLine;
         }
-        
+
         $this->configManager->updateLastRunTime(time());
 
         return implode(PHP_EOL, $logs);
@@ -407,12 +419,13 @@ class AliyunTrafficCheck
 
     public function getStatusForFrontend()
     {
-        if ($this->initError) return ['error' => $this->initError];
+        if ($this->initError)
+            return ['error' => $this->initError];
 
         $data = [];
-        $threshold = (int)$this->configManager->get('traffic_threshold', 95);
-        $userInterval = (int)$this->configManager->get('api_interval', 600);
-        
+        $threshold = (int) $this->configManager->get('traffic_threshold', 95);
+        $userInterval = (int) $this->configManager->get('api_interval', 600);
+
         $currentTime = time();
         $accounts = $this->configManager->getAccounts();
 
@@ -427,21 +440,21 @@ class AliyunTrafficCheck
             if (($currentTime - $lastUpdate) > $checkInterval) {
                 $newTraffic = $this->safeGetTraffic($account);
                 $status = $this->safeGetInstanceStatus($account);
-                
+
                 if ($status === 'Unknown') {
-                    usleep(500000); 
+                    usleep(500000);
                     $status = $this->safeGetInstanceStatus($account);
                 }
 
                 if ($newTraffic < 0) {
-                    $traffic = $account['traffic_used']; 
+                    $traffic = $account['traffic_used'];
                     $newUpdateTime = $lastUpdate;
                 } else {
                     $traffic = $newTraffic;
-                    $this->db->addHourlyStat($account['access_key_id'], $traffic);
-                    $this->db->addDailyStat($account['access_key_id'], $traffic);
+                    $this->db->addHourlyStat($account['id'], $traffic);
+                    $this->db->addDailyStat($account['id'], $traffic);
                 }
-                
+
                 if ($status === 'Unknown') {
                     $newUpdateTime = $lastUpdate;
                 }
@@ -456,9 +469,9 @@ class AliyunTrafficCheck
             $isFull = $usagePercent >= $threshold;
 
             $data[] = [
-                'id' => $account['id'], 
+                'id' => $account['id'],
                 'account' => substr($account['access_key_id'], 0, 7) . '***',
-                'flow_total' => (float)$account['max_traffic'],
+                'flow_total' => (float) $account['max_traffic'],
                 'flow_used' => round($traffic, 2),
                 'percentageOfUse' => $usagePercent,
                 'region' => $account['region_id'],
@@ -469,7 +482,7 @@ class AliyunTrafficCheck
                 'lastUpdated' => date('Y-m-d H:i:s', $lastUpdate > 0 ? $lastUpdate : $currentTime)
             ];
         }
-        
+
         return [
             'data' => $data,
             'system_last_run' => $this->configManager->getLastRunTime()
@@ -478,20 +491,22 @@ class AliyunTrafficCheck
 
     public function refreshAccount($id)
     {
-        if ($this->initError) return false;
+        if ($this->initError)
+            return false;
 
         $targetAccount = $this->configManager->getAccountById($id);
-        if (!$targetAccount) return false;
+        if (!$targetAccount)
+            return false;
 
         $currentTime = time();
         $traffic = $this->safeGetTraffic($targetAccount);
         $status = $this->safeGetInstanceStatus($targetAccount);
 
         if ($traffic < 0) {
-            $traffic = $targetAccount['traffic_used']; 
+            $traffic = $targetAccount['traffic_used'];
         } else {
-            $this->db->addHourlyStat($targetAccount['access_key_id'], $traffic);
-            $this->db->addDailyStat($targetAccount['access_key_id'], $traffic);
+            $this->db->addHourlyStat($targetAccount['id'], $traffic);
+            $this->db->addDailyStat($targetAccount['id'], $traffic);
         }
 
         return $this->configManager->updateAccountStatus($id, $traffic, $status, $currentTime);
@@ -562,8 +577,10 @@ class AliyunTrafficCheck
         }
     }
 
-    private function isTimeInRange($current, $start, $end) {
-        if (!$start || !$end) return false;
+    private function isTimeInRange($current, $start, $end)
+    {
+        if (!$start || !$end)
+            return false;
         if ($start < $end) {
             return $current >= $start && $current < $end;
         } else {
@@ -594,8 +611,10 @@ class AliyunTrafficCheck
         return $regions[$regionId] ?? $regionId;
     }
 
-    public function renderTemplate() {
-        if (!file_exists('template.html')) return "File not found";
+    public function renderTemplate()
+    {
+        if (!file_exists('template.html'))
+            return "File not found";
         ob_start();
         include 'template.html';
         return ob_get_clean();
