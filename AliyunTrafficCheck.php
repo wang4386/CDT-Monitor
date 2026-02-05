@@ -514,7 +514,7 @@ class AliyunTrafficCheck
     private function safeGetTraffic($account)
     {
         try {
-            return $this->aliyunService->getTraffic($account['access_key_id'], $account['access_key_secret']);
+            return $this->aliyunService->getTraffic($account['access_key_id'], $account['access_key_secret'], $account['region_id']);
         } catch (ClientException $e) {
             $code = $e->getErrorCode();
             $this->db->addLog('error', "流量查询配置错误: " . ($code ?: "鉴权失败"));

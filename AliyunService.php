@@ -71,37 +71,77 @@ class AliyunService
         usleep($base + $jitter);
     }
 
+    private $trafficCache = [];
+
+    /**
+     * 判断是否为海外区域
+     * 国内区域：cn-* (排除 cn-hongkong)
+     * 海外区域：其他所有区域 + cn-hongkong
+     */
+    private function isOverseas($regionId)
+    {
+        // 简单判断：如果以 cn- 开头且不是 cn-hongkong，则是国内
+        if (strpos($regionId, 'cn-') === 0 && $regionId !== 'cn-hongkong') {
+            return false;
+        }
+        return true;
+    }
+
     /**
      * 获取 CDT 流量
+     * @param string $key AccessKey
+     * @param string $secret Secret
+     * @param string $targetRegion 目标实例的区域ID
      * @throws \Exception
      */
-    public function getTraffic($key, $secret)
+    public function getTraffic($key, $secret, $targetRegion)
     {
-        return $this->executeWithRetry(function () use ($key, $secret) {
-            AlibabaCloud::accessKeyClient($key, $secret)
-                ->regionId('cn-hongkong')
-                ->asDefaultClient();
+        // 1. 检查缓存
+        $cacheKey = md5($key);
+        if (isset($this->trafficCache[$cacheKey])) {
+            $result = $this->trafficCache[$cacheKey];
+        } else {
+            // 2. 如果无缓存，发起 API 请求
+            $result = $this->executeWithRetry(function () use ($key, $secret) {
+                AlibabaCloud::accessKeyClient($key, $secret)
+                    ->regionId('cn-hongkong') // CDT 接口通常用 cn-hongkong 或 cn-hangzhou 调用即可获取全局数据
+                    ->asDefaultClient();
+                
+                return AlibabaCloud::rpc()
+                    ->product('CDT')
+                    ->scheme('https')
+                    ->version('2021-08-13')
+                    ->action('ListCdtInternetTraffic')
+                    ->method('POST')
+                    ->host('cdt.aliyuncs.com')
+                    ->options([
+                        'connect_timeout' => 5.0,
+                        'timeout' => 10.0
+                    ])
+                    ->request();
+            }, 'getTraffic');
             
-            $result = AlibabaCloud::rpc()
-                ->product('CDT')
-                ->scheme('https')
-                ->version('2021-08-13')
-                ->action('ListCdtInternetTraffic')
-                ->method('POST')
-                ->host('cdt.aliyuncs.com')
-                ->options([
-                    // 优化点3: 按要求缩短超时时间，提升响应速度
-                    'connect_timeout' => 5.0, // 连接超时 10s -> 5s
-                    'timeout' => 10.0         // 读取超时 30s -> 10s
-                ])
-                ->request();
-            
-            if (isset($result['TrafficDetails'])) {
-                return array_sum(array_column($result['TrafficDetails'], 'Traffic')) / (1024 * 1024 * 1024);
+            // 写入缓存
+            $this->trafficCache[$cacheKey] = $result;
+        }
+
+        if (isset($result['TrafficDetails'])) {
+            $isTargetOverseas = $this->isOverseas($targetRegion);
+            $totalTraffic = 0;
+
+            foreach ($result['TrafficDetails'] as $detail) {
+                // 核心逻辑：区分国内/海外
+                // 只有当流量产生区域的属性（国内/海外）与目标实例区域属性一致时，才计入
+                $trafficRegion = $detail['RegionId'] ?? '';
+                if ($this->isOverseas($trafficRegion) === $isTargetOverseas) {
+                    $totalTraffic += $detail['Traffic'];
+                }
             }
-            
-            throw new \Exception("API 响应缺少 TrafficDetails 字段");
-        }, 'getTraffic');
+
+            return $totalTraffic / (1024 * 1024 * 1024);
+        }
+        
+        throw new \Exception("API 响应缺少 TrafficDetails 字段");
     }
 
     /**
