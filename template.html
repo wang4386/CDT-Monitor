@@ -1,10 +1,11 @@
 <!DOCTYPE html>
 <html lang="zh-CN" class="antialiased">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>阿里云 CDT 监控控制台</title>
-        <!-- 引用 Favicon 图标 -->
+    <!-- 引用 Favicon 图标 -->
     <link rel="icon" type="image/png" href="icon.png">
     <!-- 替换为 Tailwind CSS v4 CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
@@ -34,1033 +35,1202 @@
     </style>
 
     <style>
-        [v-cloak] { display: none !important; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        
+        [v-cloak] {
+            display: none !important;
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
         .glass-panel {
             background: rgba(255, 255, 255, 0.65);
             backdrop-filter: blur(40px);
             -webkit-backdrop-filter: blur(40px);
             border: 1px solid rgba(255, 255, 255, 0.6);
-            box-shadow: 0 1px 2px rgba(0,0,0,0.02), 0 8px 32px rgba(0,0,0,0.04), inset 0 0 0 1px rgba(255,255,255,0.2);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02), 0 8px 32px rgba(0, 0, 0, 0.04), inset 0 0 0 1px rgba(255, 255, 255, 0.2);
         }
-        
+
         .glass-input {
             background: rgba(242, 242, 247, 0.5);
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
             transition: all 0.2s;
         }
+
         .glass-input:focus {
             background: #fff;
-            box-shadow: 0 0 0 2px rgba(0,0,0,0.05);
+            box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
         }
-        
+
         .tap-effect:active {
             transform: scale(0.96);
             transition: transform 0.1s cubic-bezier(0.2, 0.8, 0.2, 1);
         }
-        
+
         .tooltip-content {
             visibility: hidden;
             opacity: 0;
-            left: -2rem; 
+            left: -2rem;
             transform: translateY(10px);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
         .group:hover .tooltip-content {
             visibility: visible;
             opacity: 1;
             transform: translateY(0);
         }
+
         @media (min-width: 768px) {
-            .tooltip-content { left: 50%; transform: translateY(10px) translateX(-50%); }
-            .group:hover .tooltip-content { transform: translateY(0) translateX(-50%); }
+            .tooltip-content {
+                left: 50%;
+                transform: translateY(10px) translateX(-50%);
+            }
+
+            .group:hover .tooltip-content {
+                transform: translateY(0) translateX(-50%);
+            }
         }
 
-        .dropdown-enter-active, .dropdown-leave-active { transition: all 0.2s ease; }
-        .dropdown-enter-from, .dropdown-leave-to { opacity: 0; transform: translateY(-10px); }
+        .dropdown-enter-active,
+        .dropdown-leave-active {
+            transition: all 0.2s ease;
+        }
 
-        body { background-color: #F2F2F7; }
+        .dropdown-enter-from,
+        .dropdown-leave-to {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        body {
+            background-color: #F2F2F7;
+        }
 
         /* Chart Modal Animations */
-        .chart-enter-active, .chart-leave-active { transition: all 0.3s ease; }
-        .chart-enter-from, .chart-leave-to { opacity: 0; transform: translateY(10px); }
+        .chart-enter-active,
+        .chart-leave-active {
+            transition: all 0.3s ease;
+        }
+
+        .chart-enter-from,
+        .chart-leave-to {
+            opacity: 0;
+            transform: translateY(10px);
+        }
     </style>
 </head>
+
 <body class="text-[#1C1C1E]">
 
-<div id="app" v-cloak class="min-h-screen p-6 md:p-12 flex flex-col items-center">
-    
-    <div v-if="cronWarning && initialized && !criticalError" class="w-full max-w-5xl mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-xl shadow-sm animate-fade-in">
-        <div class="flex">
-            <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
-                </svg>
-            </div>
-            <div class="ml-3">
-                <p class="text-sm text-yellow-700">
-                    <span class="font-bold">监控心跳异常：</span>
-                    计划任务可能未运行，请检查 Crontab 设置 (超过 3 分钟无响应)。
-                </p>
+    <div id="app" v-cloak class="min-h-screen p-6 md:p-12 flex flex-col items-center">
+
+        <div v-if="cronWarning && initialized && !criticalError"
+            class="w-full max-w-5xl mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-xl shadow-sm animate-fade-in">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd"
+                            d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                            clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-yellow-700">
+                        <span class="font-bold">监控心跳异常：</span>
+                        计划任务可能未运行，请检查 Crontab 设置 (超过 3 分钟无响应)。
+                    </p>
+                </div>
             </div>
         </div>
-    </div>
 
-    <header class="w-full max-w-5xl flex justify-between items-center mb-10 px-2">
-        <div>
-            <h1 class="text-2xl font-bold tracking-tight text-[#1C1C1E]">CDT Monitor</h1>
-            <p class="text-xs font-semibold tracking-widest text-gray-400 uppercase mt-1">Status & Control</p>
-        </div>
-        
-        <button v-if="initialized && !checkingLogin && !criticalError" @click="toggleAdmin" 
-            class="tap-effect px-5 py-2 rounded-full text-sm font-medium transition-all duration-300"
-            :class="isAdmin ? 'bg-[#1C1C1E] text-white shadow-lg' : 'bg-white text-gray-600 shadow-sm border border-gray-200'">
-            {{ isAdmin ? '退出管理' : '管理员登录' }}
-        </button>
-    </header>
+        <header class="w-full max-w-5xl flex justify-between items-center mb-10 px-2">
+            <div>
+                <h1 class="text-2xl font-bold tracking-tight text-[#1C1C1E]">CDT Monitor</h1>
+                <p class="text-xs font-semibold tracking-widest text-gray-400 uppercase mt-1">Status & Control</p>
+            </div>
 
-    <main v-if="initialized && !loading && !criticalError" class="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in-up">
-        <div v-for="(item, index) in statusData" :key="index" 
-             class="glass-panel rounded-[32px] p-6 flex flex-col justify-between relative overflow-hidden group hover:shadow-2xl transition-all duration-500">
-            <div class="absolute top-0 right-0 p-6 opacity-50 flex gap-2">
-                <button v-if="isAdmin" @click="openChart(item.id, item.account)"
+            <button v-if="initialized && !checkingLogin && !criticalError" @click="toggleAdmin"
+                class="tap-effect px-5 py-2 rounded-full text-sm font-medium transition-all duration-300"
+                :class="isAdmin ? 'bg-[#1C1C1E] text-white shadow-lg' : 'bg-white text-gray-600 shadow-sm border border-gray-200'">
+                {{ isAdmin ? '退出管理' : '管理员登录' }}
+            </button>
+        </header>
+
+        <main v-if="initialized && !loading && !criticalError"
+            class="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in-up">
+            <div v-for="(item, index) in statusData" :key="index"
+                class="glass-panel rounded-[32px] p-6 flex flex-col justify-between relative overflow-hidden group hover:shadow-2xl transition-all duration-500">
+                <div class="absolute top-0 right-0 p-6 opacity-50 flex gap-2">
+                    <button v-if="isAdmin" @click="openChart(item.id, item.account)"
                         class="p-1 rounded-full hover:bg-white/50 text-gray-400 hover:text-blue-500 transition-colors mr-1"
                         title="查看流量历史">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-                    </svg>
-                </button>
-                
-                <button v-if="isAdmin" @click="refreshSingle(item.id, index)" 
-                        class="p-1 rounded-full hover:bg-white/50 text-gray-400 hover:text-gray-600 transition-colors"
-                        :class="{'animate-spin': refreshingMap[index]}" 
-                        :disabled="refreshingMap[index]">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-                    </svg>
-                </button>
-                <div class="w-2 h-2 rounded-full transition-colors duration-500 mt-1.5" 
-                     :class="item.rate95 ? 'bg-red-500 shadow-[0_0_10px_rgba(255,59,48,0.5)]' : 'bg-green-500 shadow-[0_0_10px_rgba(52,199,89,0.5)]'"></div>
-            </div>
-            
-            <div>
-                <div class="flex items-center gap-2 mb-4">
-                    <span class="px-2 py-1 bg-gray-100/50 rounded-lg text-[10px] font-bold tracking-wider text-gray-500 uppercase border border-white/40">{{ item.regionName }}</span>
-                    <span class="text-[10px] text-gray-400">{{ item.lastUpdated ? item.lastUpdated.split(' ')[1] : '' }} 更新</span>
-                </div>
-                <h3 class="text-3xl font-extrabold tracking-tighter text-[#1C1C1E]">
-                    {{ item.flow_used }} <span class="text-base font-medium text-gray-400">GB</span>
-                </h3>
-                <div class="flex justify-between items-end mt-1">
-                     <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">已用流量</p>
-                     <p class="text-xs font-medium text-gray-400">{{ item.percentageOfUse }}% / {{ item.flow_total }}G</p>
-                </div>
-                <div class="w-full h-1.5 bg-gray-200/50 rounded-full mt-3 overflow-hidden">
-                    <div class="h-full rounded-full transition-all duration-1000 ease-out"
-                         :class="item.rate95 ? 'bg-[#FF3B30]' : 'bg-[#1C1C1E]'"
-                         :style="{ width: Math.min(item.percentageOfUse, 100) + '%' }"></div>
-                </div>
-            </div>
-            <div class="mt-6 pt-6 border-t border-gray-200/40 flex flex-col gap-2">
-                <div class="flex justify-between items-center">
-                    <span class="text-sm font-medium text-gray-500">运行状态</span>
-                    <span class="text-sm font-bold" :class="getInstanceStatusColor(item.instanceStatus)">{{ item.instanceStatus }}</span>
-                </div>
-                <div class="flex justify-between items-center">
-                    <span class="text-sm font-medium text-gray-500">账号</span>
-                    <span class="text-sm font-medium text-[#1C1C1E] font-mono">{{ item.account }}</span>
-                </div>
-                <div v-if="item.remark" class="flex justify-between items-center">
-                    <span class="text-sm font-medium text-gray-500">备注</span>
-                    <span class="text-sm font-medium text-[#1C1C1E]">{{ item.remark }}</span>
-                </div>
-                 <div class="flex justify-between items-center">
-                    <span class="text-xs font-medium text-gray-400">当前阈值</span>
-                    <span class="text-xs font-medium text-gray-400">{{ item.threshold }}%</span>
-                </div>
-            </div>
-        </div>
-        <div v-if="statusData.length === 0" class="col-span-full py-20 text-center text-gray-400">
-            <p>暂无监控账号，请点击右上角登录管理员添加。</p>
-        </div>
-    </main>
-    
-    <div v-if="initialized && loading && !criticalError" class="w-full h-64 flex items-center justify-center">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800"></div>
-    </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                            stroke="currentColor" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+                        </svg>
+                    </button>
 
-    <div v-if="showChartModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-gray-300/30 backdrop-blur-md" @click="closeChart"></div>
-        <div class="glass-panel w-full max-w-5xl h-[500px] flex flex-col p-0 rounded-[32px] relative z-10 shadow-2xl bg-white/90 overflow-hidden">
-            <div class="flex justify-between items-center p-6 border-b border-gray-100">
-                <div>
-                    <h3 class="text-xl font-bold text-[#1C1C1E]">流量统计</h3>
-                    <p class="text-xs text-gray-400 font-mono mt-1">账号: {{ currentChartAccount }}</p>
+                    <button v-if="isAdmin" @click="refreshSingle(item.id, index)"
+                        class="p-1 rounded-full hover:bg-white/50 text-gray-400 hover:text-gray-600 transition-colors"
+                        :class="{'animate-spin': refreshingMap[index]}" :disabled="refreshingMap[index]">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                            stroke="currentColor" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round"
+                                d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                        </svg>
+                    </button>
+                    <div class="w-2 h-2 rounded-full transition-colors duration-500 mt-1.5"
+                        :class="item.rate95 ? 'bg-red-500 shadow-[0_0_10px_rgba(255,59,48,0.5)]' : 'bg-green-500 shadow-[0_0_10px_rgba(52,199,89,0.5)]'">
+                    </div>
                 </div>
-                
-                <div class="bg-gray-100 p-1 rounded-xl flex gap-1">
-                    <button @click="switchChartMode('24h')" 
+
+                <div>
+                    <div class="flex items-center gap-2 mb-4">
+                        <span
+                            class="px-2 py-1 bg-gray-100/50 rounded-lg text-[10px] font-bold tracking-wider text-gray-500 uppercase border border-white/40">{{
+                            item.regionName }}</span>
+                        <span class="text-[10px] text-gray-400">{{ item.lastUpdated ? item.lastUpdated.split(' ')[1] :
+                            '' }} 更新</span>
+                    </div>
+                    <h3 class="text-3xl font-extrabold tracking-tighter text-[#1C1C1E]">
+                        {{ item.flow_used }} <span class="text-base font-medium text-gray-400">GB</span>
+                    </h3>
+                    <div class="flex justify-between items-end mt-1">
+                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">已用流量</p>
+                        <p class="text-xs font-medium text-gray-400">{{ item.percentageOfUse }}% / {{ item.flow_total
+                            }}G</p>
+                    </div>
+                    <div class="w-full h-1.5 bg-gray-200/50 rounded-full mt-3 overflow-hidden">
+                        <div class="h-full rounded-full transition-all duration-1000 ease-out"
+                            :class="item.rate95 ? 'bg-[#FF3B30]' : 'bg-[#1C1C1E]'"
+                            :style="{ width: Math.min(item.percentageOfUse, 100) + '%' }"></div>
+                    </div>
+                </div>
+                <div class="mt-6 pt-6 border-t border-gray-200/40 flex flex-col gap-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-medium text-gray-500">运行状态</span>
+                        <span class="text-sm font-bold" :class="getInstanceStatusColor(item.instanceStatus)">{{
+                            item.instanceStatus }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-sm font-medium text-gray-500">账号</span>
+                        <span class="text-sm font-medium text-[#1C1C1E] font-mono">{{ item.account }}</span>
+                    </div>
+                    <div v-if="item.remark" class="flex justify-between items-center">
+                        <span class="text-sm font-medium text-gray-500">备注</span>
+                        <span class="text-sm font-medium text-[#1C1C1E]">{{ item.remark }}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-medium text-gray-400">当前阈值</span>
+                        <span class="text-xs font-medium text-gray-400">{{ item.threshold }}%</span>
+                    </div>
+                </div>
+            </div>
+            <div v-if="statusData.length === 0" class="col-span-full py-20 text-center text-gray-400">
+                <p>暂无监控账号，请点击右上角登录管理员添加。</p>
+            </div>
+        </main>
+
+        <div v-if="initialized && loading && !criticalError" class="w-full h-64 flex items-center justify-center">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800"></div>
+        </div>
+
+        <div v-if="showChartModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-gray-300/30 backdrop-blur-md" @click="closeChart"></div>
+            <div
+                class="glass-panel w-full max-w-5xl h-[500px] flex flex-col p-0 rounded-[32px] relative z-10 shadow-2xl bg-white/90 overflow-hidden">
+                <div class="flex justify-between items-center p-6 border-b border-gray-100">
+                    <div>
+                        <h3 class="text-xl font-bold text-[#1C1C1E]">流量统计</h3>
+                        <p class="text-xs text-gray-400 font-mono mt-1">账号: {{ currentChartAccount }}</p>
+                    </div>
+
+                    <div class="bg-gray-100 p-1 rounded-xl flex gap-1">
+                        <button @click="switchChartMode('24h')"
                             class="px-4 py-1.5 text-xs font-bold rounded-lg transition-all"
                             :class="chartMode === '24h' ? 'bg-white text-[#1C1C1E] shadow-sm' : 'text-gray-400 hover:text-gray-600'">
-                        近24小时
-                    </button>
-                    <button @click="switchChartMode('30d')" 
+                            近24小时
+                        </button>
+                        <button @click="switchChartMode('30d')"
                             class="px-4 py-1.5 text-xs font-bold rounded-lg transition-all"
                             :class="chartMode === '30d' ? 'bg-white text-[#1C1C1E] shadow-sm' : 'text-gray-400 hover:text-gray-600'">
-                        近30天
+                            近30天
+                        </button>
+                    </div>
+
+                    <button @click="closeChart" class="p-2 rounded-full hover:bg-gray-100 text-gray-400 transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
                     </button>
                 </div>
 
-                <button @click="closeChart" class="p-2 rounded-full hover:bg-gray-100 text-gray-400 transition">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-            
-            <div class="flex-1 p-6 relative">
-                <div v-if="chartLoading" class="absolute inset-0 flex items-center justify-center bg-white/50 z-20">
-                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800"></div>
-                </div>
-                <div id="echarts-container" class="w-full h-full"></div>
-                
-                <div v-if="!chartLoading && isChartEmpty" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 pointer-events-none">
-                    <svg class="w-12 h-12 mb-2 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-                    <p class="text-sm">暂无统计数据 (等待整点更新)</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div v-if="criticalError" class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-red-50/50 backdrop-blur-sm">
-        <div class="glass-panel w-full max-w-md p-8 rounded-[40px] shadow-xl border-red-200 bg-red-50/80">
-            <div class="text-center">
-                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-                    <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                </div>
-                <h3 class="text-lg font-medium leading-6 text-red-900">系统初始化错误</h3>
-                <div class="mt-2 px-2 py-3">
-                    <p class="text-sm text-red-700 break-words font-mono bg-red-100/50 p-2 rounded-lg">{{ criticalError }}</p>
-                </div>
-                <p class="mt-4 text-xs text-gray-500">请检查服务器目录权限，确保 Web 用户对当前目录有写入权限。</p>
-                <div class="mt-6">
-                    <button @click="location.reload()" class="w-full inline-flex justify-center rounded-xl border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:text-sm">重试</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div v-if="showLoginModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-gray-200/30 backdrop-blur-md" @click="showLoginModal = false"></div>
-        <div class="glass-panel w-full max-w-md p-8 rounded-[40px] relative z-10 transform transition-all shadow-2xl">
-            <h2 class="text-2xl font-bold mb-6 text-center">管理员验证</h2>
-            <input type="password" v-model="passwordInput" placeholder="请输入配置密码" 
-                   class="w-full glass-input px-4 py-3 rounded-xl border border-transparent focus:outline-none transition-all text-center text-lg mb-6">
-            <button @click="performLogin" class="w-full bg-[#1C1C1E] text-white py-3 rounded-2xl font-semibold tap-effect shadow-lg">解锁控制台</button>
-        </div>
-    </div>
-
-    <div v-if="!initialized && !loadingCheckInit && !criticalError" class="fixed inset-0 z-50 flex flex-col items-center justify-center p-6 bg-[#F2F2F7]">
-        <div class="glass-panel w-full max-w-lg p-10 rounded-[48px] shadow-2xl border border-white/80">
-            <div class="text-center mb-8">
-                <h1 class="text-3xl font-extrabold text-[#1C1C1E] mb-2">欢迎使用 CDT Monitor</h1>
-                <p class="text-gray-500 text-sm">初次使用，请先配置核心参数。</p>
-            </div>
-            <div class="space-y-6">
-                <div class="space-y-2">
-                    <label class="text-xs font-bold text-gray-500 ml-2 uppercase tracking-wider">设置管理员密码 <span class="text-red-500">*</span></label>
-                    <input type="text" v-model="setupData.admin_password" placeholder="用于登录后台管理" class="w-full glass-input rounded-2xl px-5 py-3 text-base focus:ring-2 focus:ring-gray-200 focus:bg-white transition-all">
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="space-y-2">
-                        <label class="text-xs font-bold text-gray-500 ml-2 uppercase tracking-wider">流量阈值 (%)</label>
-                        <input type="number" v-model.number="setupData.traffic_threshold" class="w-full glass-input rounded-2xl px-5 py-3 text-base">
+                <div class="flex-1 p-6 relative">
+                    <div v-if="chartLoading" class="absolute inset-0 flex items-center justify-center bg-white/50 z-20">
+                        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800"></div>
                     </div>
-                    <div class="space-y-2">
-                        <label class="text-xs font-bold text-gray-500 ml-2 uppercase tracking-wider">停机模式</label>
-                        <select v-model="setupData.shutdown_mode" class="w-full glass-input rounded-2xl px-5 py-3 text-base appearance-none bg-transparent">
-                            <option value="KeepCharging">普通停机</option>
-                            <option value="StopCharging">节省停机</option>
-                        </select>
+                    <div id="echarts-container" class="w-full h-full"></div>
+
+                    <div v-if="!chartLoading && isChartEmpty"
+                        class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 pointer-events-none">
+                        <svg class="w-12 h-12 mb-2 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z">
+                            </path>
+                        </svg>
+                        <p class="text-sm">暂无统计数据 (等待整点更新)</p>
                     </div>
                 </div>
-                <button @click="performSetup" :disabled="!setupData.admin_password" class="w-full bg-[#1C1C1E] text-white py-4 rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-4">初始化系统</button>
-                <p class="text-center text-[10px] text-gray-400">点击后将创建本地数据库并自动登录。</p>
             </div>
         </div>
-    </div>
 
-    <div v-if="isAdmin && config" class="w-full max-w-5xl mt-12 mb-20 animate-fade-in-up space-y-8">
-        <div class="flex items-center gap-4">
-            <h2 class="text-xl font-bold">系统配置</h2>
-            <div class="h-px bg-gray-300 flex-1"></div>
+        <div v-if="criticalError"
+            class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-red-50/50 backdrop-blur-sm">
+            <div class="glass-panel w-full max-w-md p-8 rounded-[40px] shadow-xl border-red-200 bg-red-50/80">
+                <div class="text-center">
+                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                        <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-medium leading-6 text-red-900">系统初始化错误</h3>
+                    <div class="mt-2 px-2 py-3">
+                        <p class="text-sm text-red-700 break-words font-mono bg-red-100/50 p-2 rounded-lg">{{
+                            criticalError }}</p>
+                    </div>
+                    <p class="mt-4 text-xs text-gray-500">请检查服务器目录权限，确保 Web 用户对当前目录有写入权限。</p>
+                    <div class="mt-6">
+                        <button @click="location.reload()"
+                            class="w-full inline-flex justify-center rounded-xl border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:text-sm">重试</button>
+                    </div>
+                </div>
+            </div>
         </div>
-        
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div class="lg:col-span-1 space-y-8">
-                <div class="glass-panel rounded-[32px] p-6 overflow-visible z-20"> 
-                    <h3 class="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4">全局设置</h3>
-                    <div class="space-y-4">
-                        <div class="space-y-1">
-                            <label class="text-xs font-medium text-gray-500 ml-2">管理员密码</label>
-                            <input v-model="config.admin_password" type="text" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+
+        <div v-if="showLoginModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-gray-200/30 backdrop-blur-md" @click="showLoginModal = false"></div>
+            <div
+                class="glass-panel w-full max-w-md p-8 rounded-[40px] relative z-10 transform transition-all shadow-2xl">
+                <h2 class="text-2xl font-bold mb-6 text-center">管理员验证</h2>
+                <input type="password" v-model="passwordInput" placeholder="请输入配置密码"
+                    class="w-full glass-input px-4 py-3 rounded-xl border border-transparent focus:outline-none transition-all text-center text-lg mb-6">
+                <button @click="performLogin"
+                    class="w-full bg-[#1C1C1E] text-white py-3 rounded-2xl font-semibold tap-effect shadow-lg">解锁控制台</button>
+            </div>
+        </div>
+
+        <div v-if="!initialized && !loadingCheckInit && !criticalError"
+            class="fixed inset-0 z-50 flex flex-col items-center justify-center p-6 bg-[#F2F2F7]">
+            <div class="glass-panel w-full max-w-lg p-10 rounded-[48px] shadow-2xl border border-white/80">
+                <div class="text-center mb-8">
+                    <h1 class="text-3xl font-extrabold text-[#1C1C1E] mb-2">欢迎使用 CDT Monitor</h1>
+                    <p class="text-gray-500 text-sm">初次使用，请先配置核心参数。</p>
+                </div>
+                <div class="space-y-6">
+                    <div class="space-y-2">
+                        <label class="text-xs font-bold text-gray-500 ml-2 uppercase tracking-wider">设置管理员密码 <span
+                                class="text-red-500">*</span></label>
+                        <input type="text" v-model="setupData.admin_password" placeholder="用于登录后台管理"
+                            class="w-full glass-input rounded-2xl px-5 py-3 text-base focus:ring-2 focus:ring-gray-200 focus:bg-white transition-all">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <label class="text-xs font-bold text-gray-500 ml-2 uppercase tracking-wider">流量阈值
+                                (%)</label>
+                            <input type="number" v-model.number="setupData.traffic_threshold"
+                                class="w-full glass-input rounded-2xl px-5 py-3 text-base">
                         </div>
-                        <div class="space-y-1">
-                            <label class="text-xs font-medium text-gray-500 ml-2">告警阈值 (%)</label>
-                            <input v-model.number="config.traffic_threshold" type="number" min="1" max="100" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
-                        </div>
-                        
-                        <div class="space-y-1">
-                            <label class="text-xs font-medium text-gray-500 ml-2">接口调用频率</label>
-                            <select v-model.number="config.api_interval" class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none cursor-pointer">
-                                <option value="60">1 分钟 (高频)</option>
-                                <option value="180">3 分钟</option>
-                                <option value="300">5 分钟</option>
-                                <option value="600">10 分钟 (默认)</option>
-                                <option value="1800">30 分钟 (低频)</option>
+                        <div class="space-y-2">
+                            <label class="text-xs font-bold text-gray-500 ml-2 uppercase tracking-wider">停机模式</label>
+                            <select v-model="setupData.shutdown_mode"
+                                class="w-full glass-input rounded-2xl px-5 py-3 text-base appearance-none bg-transparent">
+                                <option value="KeepCharging">普通停机</option>
+                                <option value="StopCharging">节省停机</option>
                             </select>
-                            <p class="text-[10px] text-gray-400 px-2 mt-1">控制更新状态和流量的频率。开关机操作触发时会自动加速至 1 分钟。</p>
                         </div>
+                    </div>
+                    <button @click="performSetup" :disabled="!setupData.admin_password"
+                        class="w-full bg-[#1C1C1E] text-white py-4 rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-4">初始化系统</button>
+                    <p class="text-center text-[10px] text-gray-400">点击后将创建本地数据库并自动登录。</p>
+                </div>
+            </div>
+        </div>
 
-                        <div class="space-y-1 relative">
-                            <div class="flex items-center gap-1">
-                                <label class="text-xs font-medium text-gray-500 ml-2">停机模式</label>
-                                <div class="group relative flex items-center">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 text-gray-400 cursor-help hover:text-gray-600 transition-colors">
-                                      <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-                                    </svg>
-                                    <div class="tooltip-content absolute bottom-full mb-2 w-64 md:w-80 p-4 bg-[#1C1C1E]/95 backdrop-blur-md text-white text-xs rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.3)] z-50 border border-gray-700 pointer-events-none text-left leading-relaxed">
-                                        <div class="space-y-3">
-                                            <div>
-                                                <h4 class="text-orange-400 font-bold mb-1">普通停机模式 (KeepCharging)</h4>
-                                                <p class="text-gray-300">停止实例后保留实例的资源并继续收费。</p>
+        <div v-if="isAdmin && config" class="w-full max-w-5xl mt-12 mb-20 animate-fade-in-up space-y-8">
+            <div class="flex items-center gap-4">
+                <h2 class="text-xl font-bold">系统配置</h2>
+                <div class="h-px bg-gray-300 flex-1"></div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-1 space-y-8">
+                    <div class="glass-panel rounded-[32px] p-6 overflow-visible z-20">
+                        <h3 class="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4">全局设置</h3>
+                        <div class="space-y-4">
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-gray-500 ml-2">管理员密码</label>
+                                <input v-model="config.admin_password" type="text"
+                                    class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-gray-500 ml-2">告警阈值 (%)</label>
+                                <input v-model.number="config.traffic_threshold" type="number" min="1" max="100"
+                                    class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                            </div>
+
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-gray-500 ml-2">接口调用频率</label>
+                                <select v-model.number="config.api_interval"
+                                    class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none cursor-pointer">
+                                    <option value="60">1 分钟 (高频)</option>
+                                    <option value="180">3 分钟</option>
+                                    <option value="300">5 分钟</option>
+                                    <option value="600">10 分钟 (默认)</option>
+                                    <option value="1800">30 分钟 (低频)</option>
+                                </select>
+                                <p class="text-[10px] text-gray-400 px-2 mt-1">控制更新状态和流量的频率。开关机操作触发时会自动加速至 1 分钟。</p>
+                            </div>
+
+                            <div class="space-y-1 relative">
+                                <div class="flex items-center gap-1">
+                                    <label class="text-xs font-medium text-gray-500 ml-2">停机模式</label>
+                                    <div class="group relative flex items-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                            stroke-width="1.5" stroke="currentColor"
+                                            class="w-3.5 h-3.5 text-gray-400 cursor-help hover:text-gray-600 transition-colors">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                                        </svg>
+                                        <div
+                                            class="tooltip-content absolute bottom-full mb-2 w-64 md:w-80 p-4 bg-[#1C1C1E]/95 backdrop-blur-md text-white text-xs rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.3)] z-50 border border-gray-700 pointer-events-none text-left leading-relaxed">
+                                            <div class="space-y-3">
+                                                <div>
+                                                    <h4 class="text-orange-400 font-bold mb-1">普通停机模式 (KeepCharging)
+                                                    </h4>
+                                                    <p class="text-gray-300">停止实例后保留实例的资源并继续收费。</p>
+                                                </div>
+                                                <div class="w-full h-px bg-gray-700/50"></div>
+                                                <div>
+                                                    <h4 class="text-green-400 font-bold mb-1">节省停机模式 (StopCharging)</h4>
+                                                    <p class="text-gray-300">计算资源(CPU/内存)、固定公网IP带宽暂停计费。</p>
+                                                </div>
                                             </div>
-                                            <div class="w-full h-px bg-gray-700/50"></div>
-                                            <div>
-                                                <h4 class="text-green-400 font-bold mb-1">节省停机模式 (StopCharging)</h4>
-                                                <p class="text-gray-300">计算资源(CPU/内存)、固定公网IP带宽暂停计费。</p>
+                                            <div
+                                                class="absolute top-full left-10 md:left-1/2 md:-translate-x-1/2 -mt-2 border-8 border-transparent border-t-[#1C1C1E]/95">
                                             </div>
                                         </div>
-                                        <div class="absolute top-full left-10 md:left-1/2 md:-translate-x-1/2 -mt-2 border-8 border-transparent border-t-[#1C1C1E]/95"></div>
                                     </div>
                                 </div>
-                            </div>
-                            <select v-model="config.shutdown_mode" class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none cursor-pointer">
-                                <option value="KeepCharging">普通停机 (保留IP/收费)</option>
-                                <option value="StopCharging">节省停机 (回收IP/免费)</option>
-                            </select>
-                        </div>
-                        
-                        <div class="space-y-1">
-                            <label class="text-xs font-medium text-gray-500 ml-2">流量阈值动作</label>
-                            <select v-model="config.threshold_action" class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none cursor-pointer">
-                                <option value="stop_and_notify">自动关机并告警 (默认)</option>
-                                <option value="notify_only">仅发送告警 (不关机)</option>
-                            </select>
-                        </div>
-
-                        <div class="flex items-center justify-between pt-2">
-                            <div class="flex items-center gap-1">
-                                <label class="text-xs font-medium text-gray-500 ml-2">实例保活 (抢占式)</label>
-                                <div class="group relative flex items-center">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-3.5 h-3.5 text-gray-400 cursor-help hover:text-gray-600 transition-colors">
-                                      <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-                                    </svg>
-                                    <div class="tooltip-content absolute bottom-full mb-2 w-64 md:w-72 p-4 bg-[#1C1C1E]/95 backdrop-blur-md text-white text-xs rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.3)] z-50 border border-gray-700 pointer-events-none text-left leading-relaxed">
-                                        <p class="text-gray-300">防止抢占式实例在<span class="text-green-400 font-bold">非关机时间段</span>被意外释放。</p>
-                                        <div class="absolute top-full left-10 md:left-1/2 md:-translate-x-1/2 -mt-2 border-8 border-transparent border-t-[#1C1C1E]/95"></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="relative inline-block w-10 mr-2">
-                                <input type="checkbox" v-model="config.keep_alive" id="toggle-keep-alive" class="peer sr-only"/>
-                                <label for="toggle-keep-alive" class="block overflow-hidden h-5 w-10 rounded-full bg-gray-300 cursor-pointer transition-colors peer-checked:bg-[#1C1C1E]"></label>
-                                <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
-                            </div>
-                        </div>
-
-                         <div class="flex items-center justify-between pt-2">
-                            <label class="text-xs font-medium text-gray-500 ml-2">定时任务邮件通知</label>
-                            <div class="relative inline-block w-10 mr-2">
-                                <input type="checkbox" v-model="config.enable_schedule_email" id="toggle-sched" class="peer sr-only"/>
-                                <label for="toggle-sched" class="block overflow-hidden h-5 w-10 rounded-full bg-gray-300 cursor-pointer transition-colors peer-checked:bg-[#1C1C1E]"></label>
-                                <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="glass-panel rounded-[32px] p-6 z-10">
-                    <h3 class="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4">邮件服务器配置</h3>
-                    <div class="space-y-3">
-                        <div class="space-y-1">
-                            <label class="text-xs font-medium text-gray-500 ml-2">SMTP Host</label>
-                            <input v-model="config.Notification.host" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
-                        </div>
-                         <div class="grid grid-cols-2 gap-3">
-                            <div class="space-y-1">
-                                <label class="text-xs font-medium text-gray-500 ml-2">Port</label>
-                                <input v-model="config.Notification.port" type="number" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
-                            </div>
-                            <div class="space-y-1">
-                                <label class="text-xs font-medium text-gray-500 ml-2">Secure</label>
-                                <select v-model="config.Notification.secure" class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none">
-                                    <option value="ssl">SSL</option>
-                                    <option value="tls">TLS</option>
-                                    <option value="">无 (None)</option>
+                                <select v-model="config.shutdown_mode"
+                                    class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none cursor-pointer">
+                                    <option value="KeepCharging">普通停机 (保留IP/收费)</option>
+                                    <option value="StopCharging">节省停机 (回收IP/免费)</option>
                                 </select>
                             </div>
-                        </div>
-                        <div class="space-y-1">
-                            <label class="text-xs font-medium text-gray-500 ml-2">Username</label>
-                            <input v-model="config.Notification.username" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
-                        </div>
-                        <div class="space-y-1">
-                            <label class="text-xs font-medium text-gray-500 ml-2">Password</label>
-                            <input v-model="config.Notification.password" type="password" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
-                        </div>
-                        <div class="space-y-1">
-                            <label class="text-xs font-medium text-gray-500 ml-2">Receiver Email</label>
-                            <input v-model="config.Notification.email" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
-                        </div>
 
-                        <div class="pt-4">
-                            <button @click="sendTestEmail" :disabled="sendingEmail" class="w-full border border-gray-300 text-gray-600 py-2 rounded-xl text-xs font-semibold hover:bg-gray-50 transition disabled:opacity-50">
-                                {{ sendingEmail ? '发送中...' : '发送测试邮件' }}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-gray-500 ml-2">流量阈值动作</label>
+                                <select v-model="config.threshold_action"
+                                    class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none cursor-pointer">
+                                    <option value="stop_and_notify">自动关机并告警 (默认)</option>
+                                    <option value="notify_only">仅发送告警 (不关机)</option>
+                                </select>
+                            </div>
 
-            <div class="lg:col-span-2 space-y-8">
-                <div class="glass-panel rounded-[40px] p-8 h-fit z-0">
-                    <div class="space-y-8">
-                        <div v-for="(acc, idx) in config.Accounts" :key="idx" class="p-6 bg-white/40 rounded-[28px] border border-white/60 relative hover:bg-white/60 transition-colors">
-                            <button @click="removeAccount(idx)" class="absolute top-4 right-4 text-xs text-red-500 font-bold hover:bg-red-50 p-2 rounded-lg transition">移除</button>
-                            
-                            <h3 class="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4">账号 {{ idx + 1 }}</h3>
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div class="space-y-1">
-                                    <label class="text-xs font-medium text-gray-500 ml-2">AccessKey ID</label>
-                                    <input v-model="acc.AccessKeyId" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
-                                </div>
-                                <div class="space-y-1">
-                                    <label class="text-xs font-medium text-gray-500 ml-2">AccessKey Secret</label>
-                                    <input v-model="acc.AccessKeySecret" type="password" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
-                                </div>
-                                <div class="space-y-1">
-                                    <label class="text-xs font-medium text-gray-500 ml-2">Instance ID</label>
-                                    <input v-model="acc.instanceId" placeholder="实例 ID (必填)" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
-                                </div>
-                                 <div class="space-y-1 relative">
-                                    <label class="text-xs font-medium text-gray-500 ml-2">Region ID</label>
-                                    <input v-model="acc.regionId" 
-                                           @focus="regionSearchFocus = idx" 
-                                           @blur="setTimeout(() => regionSearchFocus = -1, 200)"
-                                           placeholder="输入地域名称或代码..." 
-                                           class="w-full glass-input rounded-xl px-4 py-2 text-sm">
-                                    
-                                    <transition name="dropdown">
-                                        <div v-show="regionSearchFocus === idx" class="absolute left-0 right-0 top-full mt-2 bg-white/90 backdrop-blur-md border border-gray-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto no-scrollbar">
-                                            <ul>
-                                                <li v-for="region in aliyunRegions.filter(r => !acc.regionId || r.id.toLowerCase().includes(acc.regionId.toLowerCase()) || r.name.includes(acc.regionId))" 
-                                                    @click="acc.regionId = region.id; regionSearchFocus = -1"
-                                                    class="px-4 py-2 text-xs hover:bg-gray-100 cursor-pointer border-b border-gray-100/50 last:border-0 flex justify-between items-center group">
-                                                    <span class="font-medium text-gray-800">{{ region.name }}</span>
-                                                    <span class="text-[10px] text-gray-400 group-hover:text-gray-600 font-mono">{{ region.id }}</span>
-                                                </li>
-                                                <li v-if="aliyunRegions.filter(r => !acc.regionId || r.id.toLowerCase().includes(acc.regionId.toLowerCase()) || r.name.includes(acc.regionId)).length === 0" class="px-4 py-3 text-xs text-gray-400 text-center">
-                                                    无匹配地域
-                                                </li>
-                                            </ul>
+                            <div class="flex items-center justify-between pt-2">
+                                <div class="flex items-center gap-1">
+                                    <label class="text-xs font-medium text-gray-500 ml-2">实例保活 (抢占式)</label>
+                                    <div class="group relative flex items-center">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+                                            stroke-width="1.5" stroke="currentColor"
+                                            class="w-3.5 h-3.5 text-gray-400 cursor-help hover:text-gray-600 transition-colors">
+                                            <path stroke-linecap="round" stroke-linejoin="round"
+                                                d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                                        </svg>
+                                        <div
+                                            class="tooltip-content absolute bottom-full mb-2 w-64 md:w-72 p-4 bg-[#1C1C1E]/95 backdrop-blur-md text-white text-xs rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.3)] z-50 border border-gray-700 pointer-events-none text-left leading-relaxed">
+                                            <p class="text-gray-300">防止抢占式实例在<span
+                                                    class="text-green-400 font-bold">非关机时间段</span>被意外释放。</p>
+                                            <div
+                                                class="absolute top-full left-10 md:left-1/2 md:-translate-x-1/2 -mt-2 border-8 border-transparent border-t-[#1C1C1E]/95">
+                                            </div>
                                         </div>
-                                    </transition>
+                                    </div>
                                 </div>
-                                <div class="space-y-1">
-                                    <label class="text-xs font-medium text-gray-500 ml-2">Max Traffic (GB)</label>
-                                    <input v-model.number="acc.maxTraffic" type="number" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                <div class="relative inline-block w-10 mr-2">
+                                    <input type="checkbox" v-model="config.keep_alive" id="toggle-keep-alive"
+                                        class="peer sr-only" />
+                                    <label for="toggle-keep-alive"
+                                        class="block overflow-hidden h-5 w-10 rounded-full bg-gray-300 cursor-pointer transition-colors peer-checked:bg-[#1C1C1E]"></label>
+                                    <div
+                                        class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5">
+                                    </div>
                                 </div>
                             </div>
 
-                            <div class="mt-4 space-y-1">
-                                <label class="text-xs font-medium text-gray-500 ml-2">备注 <span class="text-gray-400">(可选)</span></label>
-                                <input v-model="acc.remark" placeholder="为该实例添加备注说明" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
-                            </div>
-
-                            <div class="mt-6 pt-4 border-t border-gray-200/50">
-                                <div class="flex items-center gap-3 mb-3">
-                                    <div class="relative inline-block w-8 mr-1">
-                                        <input type="checkbox" v-model="acc.schedule.enabled" :id="'sched-'+idx" class="peer sr-only"/>
-                                        <label :for="'sched-'+idx" class="block overflow-hidden h-4 w-8 rounded-full bg-gray-300 cursor-pointer transition-colors peer-checked:bg-[#1C1C1E]"></label>
-                                        <div class="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
-                                    </div>
-                                    <span class="text-sm font-bold text-gray-700">启用定时开关机</span>
-                                </div>
-                                
-                                <div v-if="acc.schedule && acc.schedule.enabled" class="flex flex-wrap gap-4 items-center animate-fade-in">
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-xs text-gray-500">开机时间</span>
-                                        <input type="time" v-model="acc.schedule.startTime" class="bg-white/80 border border-gray-200 rounded-lg px-2 py-1 text-sm">
-                                    </div>
-                                    <div class="w-4 h-px bg-gray-300"></div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-xs text-gray-500">关机时间</span>
-                                        <input type="time" v-model="acc.schedule.stopTime" class="bg-white/80 border border-gray-200 rounded-lg px-2 py-1 text-sm">
+                            <div class="flex items-center justify-between pt-2">
+                                <label class="text-xs font-medium text-gray-500 ml-2">定时任务邮件通知</label>
+                                <div class="relative inline-block w-10 mr-2">
+                                    <input type="checkbox" v-model="config.enable_schedule_email" id="toggle-sched"
+                                        class="peer sr-only" />
+                                    <label for="toggle-sched"
+                                        class="block overflow-hidden h-5 w-10 rounded-full bg-gray-300 cursor-pointer transition-colors peer-checked:bg-[#1C1C1E]"></label>
+                                    <div
+                                        class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5">
                                     </div>
                                 </div>
                             </div>
                         </div>
+                    </div>
 
-                        <button @click="addAccount" class="w-full py-4 rounded-2xl border border-dashed border-gray-300 text-gray-400 hover:bg-white/40 hover:text-gray-600 transition font-medium">+ 添加账号</button>
+                    <div class="glass-panel rounded-[32px] p-6 z-10">
+                        <h3 class="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4">邮件服务器配置</h3>
+                        <div class="space-y-3">
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-gray-500 ml-2">SMTP Host</label>
+                                <input v-model="config.Notification.host"
+                                    class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="space-y-1">
+                                    <label class="text-xs font-medium text-gray-500 ml-2">Port</label>
+                                    <input v-model="config.Notification.port" type="number"
+                                        class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-xs font-medium text-gray-500 ml-2">Secure</label>
+                                    <select v-model="config.Notification.secure"
+                                        class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none">
+                                        <option value="ssl">SSL</option>
+                                        <option value="tls">TLS</option>
+                                        <option value="">无 (None)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-gray-500 ml-2">Username</label>
+                                <input v-model="config.Notification.username"
+                                    class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-gray-500 ml-2">Password</label>
+                                <input v-model="config.Notification.password" type="password"
+                                    class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-gray-500 ml-2">Receiver Email</label>
+                                <input v-model="config.Notification.email"
+                                    class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                            </div>
 
-                        <div class="flex justify-end pt-6">
-                            <button @click="saveConfig" class="bg-[#1C1C1E] text-white px-10 py-4 rounded-2xl font-bold shadow-xl tap-effect hover:shadow-2xl transition-all">保存所有配置</button>
+                            <div class="pt-4">
+                                <button @click="sendTestEmail" :disabled="sendingEmail"
+                                    class="w-full border border-gray-300 text-gray-600 py-2 rounded-xl text-xs font-semibold hover:bg-gray-50 transition disabled:opacity-50">
+                                    {{ sendingEmail ? '发送中...' : '发送测试邮件' }}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="glass-panel rounded-[40px] p-8 relative overflow-hidden">
-                    <div class="flex items-center justify-between mb-6">
-                        <div class="flex items-center gap-4">
-                            <h3 class="text-lg font-bold text-[#1C1C1E]">系统日志</h3>
-                            <div class="flex bg-gray-100/80 p-1 rounded-xl">
-                                <button @click="currentLogTab = 'action'; fetchLogs()" 
-                                        class="px-4 py-1.5 text-xs font-bold rounded-lg transition-all"
-                                        :class="currentLogTab === 'action' ? 'bg-white text-[#1C1C1E] shadow-sm' : 'text-gray-400 hover:text-gray-600'">
-                                    动作日志
-                                </button>
-                                <button @click="currentLogTab = 'heartbeat'; fetchLogs()" 
-                                        class="px-4 py-1.5 text-xs font-bold rounded-lg transition-all"
-                                        :class="currentLogTab === 'heartbeat' ? 'bg-white text-[#1C1C1E] shadow-sm' : 'text-gray-400 hover:text-gray-600'">
-                                    心跳日志
-                                </button>
+                <div class="lg:col-span-2 space-y-8">
+                    <div class="glass-panel rounded-[40px] p-8 h-fit z-0">
+                        <div class="space-y-8">
+                            <div v-for="(acc, idx) in config.Accounts" :key="idx"
+                                class="p-6 bg-white/40 rounded-[28px] border border-white/60 relative hover:bg-white/60 transition-colors">
+                                <button @click="removeAccount(idx)"
+                                    class="absolute top-4 right-4 text-xs text-red-500 font-bold hover:bg-red-50 p-2 rounded-lg transition">移除</button>
+
+                                <h3 class="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4">账号 {{ idx + 1
+                                    }}</h3>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="space-y-1">
+                                        <label class="text-xs font-medium text-gray-500 ml-2">AccessKey ID</label>
+                                        <input v-model="acc.AccessKeyId"
+                                            class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-xs font-medium text-gray-500 ml-2">AccessKey Secret</label>
+                                        <input v-model="acc.AccessKeySecret" type="password"
+                                            class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-xs font-medium text-gray-500 ml-2">Instance ID</label>
+                                        <input v-model="acc.instanceId" placeholder="实例 ID (必填)"
+                                            class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                    </div>
+                                    <div class="space-y-1 relative">
+                                        <label class="text-xs font-medium text-gray-500 ml-2">Region ID</label>
+                                        <input v-model="acc.regionId" @focus="regionSearchFocus = idx"
+                                            @blur="setTimeout(() => regionSearchFocus = -1, 200)"
+                                            placeholder="输入地域名称或代码..."
+                                            class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+
+                                        <transition name="dropdown">
+                                            <div v-show="regionSearchFocus === idx"
+                                                class="absolute left-0 right-0 top-full mt-2 bg-white/90 backdrop-blur-md border border-gray-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto no-scrollbar">
+                                                <ul>
+                                                    <li v-for="region in aliyunRegions.filter(r => !acc.regionId || r.id.toLowerCase().includes(acc.regionId.toLowerCase()) || r.name.includes(acc.regionId))"
+                                                        @click="acc.regionId = region.id; regionSearchFocus = -1"
+                                                        class="px-4 py-2 text-xs hover:bg-gray-100 cursor-pointer border-b border-gray-100/50 last:border-0 flex justify-between items-center group">
+                                                        <span class="font-medium text-gray-800">{{ region.name }}</span>
+                                                        <span
+                                                            class="text-[10px] text-gray-400 group-hover:text-gray-600 font-mono">{{
+                                                            region.id }}</span>
+                                                    </li>
+                                                    <li v-if="aliyunRegions.filter(r => !acc.regionId || r.id.toLowerCase().includes(acc.regionId.toLowerCase()) || r.name.includes(acc.regionId)).length === 0"
+                                                        class="px-4 py-3 text-xs text-gray-400 text-center">
+                                                        无匹配地域
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </transition>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-xs font-medium text-gray-500 ml-2">Max Traffic (GB)</label>
+                                        <input v-model.number="acc.maxTraffic" type="number"
+                                            class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                    </div>
+                                </div>
+
+                                <div class="mt-4 space-y-1">
+                                    <label class="text-xs font-medium text-gray-500 ml-2">备注 <span
+                                            class="text-gray-400">(可选)</span></label>
+                                    <input v-model="acc.remark" placeholder="为该实例添加备注说明"
+                                        class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                </div>
+
+                                <div class="mt-6 pt-4 border-t border-gray-200/50">
+                                    <div class="flex items-center gap-3 mb-3">
+                                        <div class="relative inline-block w-8 mr-1">
+                                            <input type="checkbox" v-model="acc.schedule.enabled" :id="'sched-'+idx"
+                                                class="peer sr-only" />
+                                            <label :for="'sched-'+idx"
+                                                class="block overflow-hidden h-4 w-8 rounded-full bg-gray-300 cursor-pointer transition-colors peer-checked:bg-[#1C1C1E]"></label>
+                                            <div
+                                                class="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-4">
+                                            </div>
+                                        </div>
+                                        <span class="text-sm font-bold text-gray-700">启用定时开关机</span>
+                                    </div>
+
+                                    <div v-if="acc.schedule && acc.schedule.enabled"
+                                        class="flex flex-wrap gap-4 items-center animate-fade-in">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs text-gray-500">开机时间</span>
+                                            <input type="time" v-model="acc.schedule.startTime"
+                                                class="bg-white/80 border border-gray-200 rounded-lg px-2 py-1 text-sm">
+                                        </div>
+                                        <div class="w-4 h-px bg-gray-300"></div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xs text-gray-500">关机时间</span>
+                                            <input type="time" v-model="acc.schedule.stopTime"
+                                                class="bg-white/80 border border-gray-200 rounded-lg px-2 py-1 text-sm">
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <div v-if="logAutoRefresh" class="flex items-center gap-1.5">
-                                <span class="relative flex h-2 w-2">
-                                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                  <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                                </span>
-                                <span class="text-[10px] text-gray-400 font-mono">LIVE</span>
+
+                            <button @click="addAccount"
+                                class="w-full py-4 rounded-2xl border border-dashed border-gray-300 text-gray-400 hover:bg-white/40 hover:text-gray-600 transition font-medium">+
+                                添加账号</button>
+
+                            <div class="flex justify-end pt-6">
+                                <button @click="saveConfig"
+                                    class="bg-[#1C1C1E] text-white px-10 py-4 rounded-2xl font-bold shadow-xl tap-effect hover:shadow-2xl transition-all">保存所有配置</button>
                             </div>
-                            <button @click="clearLogs" class="text-xs text-red-400 hover:text-red-500 font-medium transition px-2">清空</button>
                         </div>
                     </div>
-                    
-                    <div class="overflow-y-auto max-h-96 pr-2 no-scrollbar bg-white/30 rounded-2xl border border-white/40">
-                        <table class="w-full text-left border-collapse">
-                            <thead class="bg-gray-50/50 sticky top-0 backdrop-blur-md">
-                                <tr>
-                                    <th class="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-3 pl-4">时间</th>
-                                    <th v-if="currentLogTab === 'action'" class="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-3">类型</th>
-                                    <th class="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-3 pr-4">内容</th>
-                                </tr>
-                            </thead>
-                            <tbody class="text-xs text-gray-600">
-                                <tr v-for="(log, i) in systemLogs" :key="i" class="border-b border-gray-100/50 hover:bg-white/60 transition-colors last:border-0">
-                                    <td class="py-3 pl-4 text-gray-400 font-mono whitespace-nowrap w-40">{{ log.time_str }}</td>
-                                    <td v-if="currentLogTab === 'action'" class="py-3 w-20">
-                                        <span class="px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide" 
-                                              :class="{
+
+                    <div class="glass-panel rounded-[32px] md:rounded-[40px] p-5 md:p-8 relative overflow-hidden">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-5 md:mb-6">
+                            <div class="flex items-center gap-3 md:gap-4">
+                                <h3 class="text-base md:text-lg font-bold text-[#1C1C1E]">系统日志</h3>
+                                <div class="flex bg-gray-100/80 p-1 rounded-xl">
+                                    <button @click="currentLogTab = 'action'; fetchLogs()"
+                                        class="px-3 md:px-4 py-1.5 text-xs font-bold rounded-lg transition-all"
+                                        :class="currentLogTab === 'action' ? 'bg-white text-[#1C1C1E] shadow-sm' : 'text-gray-400 hover:text-gray-600'">
+                                        动作日志
+                                    </button>
+                                    <button @click="currentLogTab = 'heartbeat'; fetchLogs()"
+                                        class="px-3 md:px-4 py-1.5 text-xs font-bold rounded-lg transition-all"
+                                        :class="currentLogTab === 'heartbeat' ? 'bg-white text-[#1C1C1E] shadow-sm' : 'text-gray-400 hover:text-gray-600'">
+                                        心跳日志
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div v-if="logAutoRefresh" class="flex items-center gap-1.5">
+                                    <span class="relative flex h-2 w-2">
+                                        <span
+                                            class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                        <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                    </span>
+                                    <span class="text-[10px] text-gray-400 font-mono">LIVE</span>
+                                </div>
+                                <button @click="clearLogs"
+                                    class="text-xs text-red-400 hover:text-red-500 font-medium transition px-2">清空</button>
+                            </div>
+                        </div>
+
+                        <!-- 桌面端：表格布局 -->
+                        <div
+                            class="hidden md:block overflow-y-auto max-h-96 pr-2 no-scrollbar bg-white/30 rounded-2xl border border-white/40">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="bg-gray-50/50 sticky top-0 backdrop-blur-md">
+                                    <tr>
+                                        <th
+                                            class="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-3 pl-4">
+                                            时间</th>
+                                        <th v-if="currentLogTab === 'action'"
+                                            class="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-3">类型
+                                        </th>
+                                        <th
+                                            class="text-[10px] font-bold text-gray-400 uppercase tracking-wider py-3 pr-4">
+                                            内容</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-xs text-gray-600">
+                                    <tr v-for="(log, i) in systemLogs" :key="i"
+                                        class="border-b border-gray-100/50 hover:bg-white/60 transition-colors last:border-0">
+                                        <td class="py-3 pl-4 text-gray-400 font-mono whitespace-nowrap w-40">{{
+                                            log.time_str }}</td>
+                                        <td v-if="currentLogTab === 'action'" class="py-3 w-20">
+                                            <span
+                                                class="px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wide"
+                                                :class="{
                                                   'bg-blue-100 text-blue-700': log.type === 'info',
                                                   'bg-yellow-100 text-yellow-700': log.type === 'warning',
                                                   'bg-red-100 text-red-700': log.type === 'error'
                                               }">
-                                            {{ log.type }}
-                                        </span>
-                                    </td>
-                                    <td class="py-3 pr-4 font-mono leading-relaxed break-all" 
-                                        :class="{'text-gray-400': currentLogTab === 'heartbeat'}">
-                                        {{ log.message }}
-                                    </td>
-                                </tr>
-                                <tr v-if="systemLogs.length === 0">
-                                    <td colspan="3" class="py-12 text-center text-gray-400">
-                                        暂无{{ currentLogTab === 'action' ? '动作' : '心跳' }}记录
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                                                {{ log.type }}
+                                            </span>
+                                        </td>
+                                        <td class="py-3 pr-4 font-mono leading-relaxed break-all"
+                                            :class="{'text-gray-400': currentLogTab === 'heartbeat'}">
+                                            {{ log.message }}
+                                        </td>
+                                    </tr>
+                                    <tr v-if="systemLogs.length === 0">
+                                        <td colspan="3" class="py-12 text-center text-gray-400">
+                                            暂无{{ currentLogTab === 'action' ? '动作' : '心跳' }}记录
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- 移动端：卡片列表布局 -->
+                        <div
+                            class="md:hidden overflow-y-auto max-h-96 no-scrollbar bg-white/30 rounded-2xl border border-white/40">
+                            <div v-if="systemLogs.length === 0" class="py-12 text-center text-gray-400 text-xs">
+                                暂无{{ currentLogTab === 'action' ? '动作' : '心跳' }}记录
+                            </div>
+                            <div v-for="(log, i) in systemLogs" :key="'m'+i"
+                                class="px-4 py-3 border-b border-gray-100/50 last:border-0">
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <span class="text-[10px] text-gray-400 font-mono">{{ log.time_str }}</span>
+                                    <span v-if="currentLogTab === 'action'"
+                                        class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide"
+                                        :class="{
+                                          'bg-blue-100 text-blue-700': log.type === 'info',
+                                          'bg-yellow-100 text-yellow-700': log.type === 'warning',
+                                          'bg-red-100 text-red-700': log.type === 'error'
+                                      }">
+                                        {{ log.type }}
+                                    </span>
+                                </div>
+                                <p class="text-xs font-mono leading-relaxed break-all"
+                                    :class="currentLogTab === 'heartbeat' ? 'text-gray-400' : 'text-gray-600'">
+                                    {{ log.message }}
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-<script>
-    const { createApp, ref, onMounted, onUnmounted, computed } = Vue;
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script>
+        const { createApp, ref, onMounted, onUnmounted, computed } = Vue;
 
-    createApp({
-        setup() {
-            const statusData = ref([]);
-            const config = ref(null);
-            const loading = ref(true);
-            const isAdmin = ref(false);
-            const checkingLogin = ref(true); 
-            const showLoginModal = ref(false);
-            const passwordInput = ref('');
-            const sendingEmail = ref(false);
-            const criticalError = ref(null); 
-            
-            const initialized = ref(true); 
-            const loadingCheckInit = ref(true);
-            const regionSearchFocus = ref(-1); 
-            const refreshingMap = ref({});
-            
-            // 日志相关
-            const systemLogs = ref([]); 
-            const currentLogTab = ref('action');
-            const logAutoRefresh = ref(false);
-            let logInterval = null;
+        createApp({
+            setup() {
+                const statusData = ref([]);
+                const config = ref(null);
+                const loading = ref(true);
+                const isAdmin = ref(false);
+                const checkingLogin = ref(true);
+                const showLoginModal = ref(false);
+                const passwordInput = ref('');
+                const sendingEmail = ref(false);
+                const criticalError = ref(null);
 
-            const cronWarning = ref(false); 
+                const initialized = ref(true);
+                const loadingCheckInit = ref(true);
+                const regionSearchFocus = ref(-1);
+                const refreshingMap = ref({});
 
-            // 图表相关
-            const showChartModal = ref(false);
-            const chartLoading = ref(false);
-            const chartMode = ref('24h');
-            const currentChartId = ref(0);
-            const currentChartAccount = ref('');
-            let chartInstance = null;
-            let currentChartData = {}; 
+                // 日志相关
+                const systemLogs = ref([]);
+                const currentLogTab = ref('action');
+                const logAutoRefresh = ref(false);
+                let logInterval = null;
 
-            // 阿里云地域数据
-            const aliyunRegions = [
-                { id: 'cn-hongkong', name: '中国香港' },
-                { id: 'ap-southeast-1', name: '新加坡' },
-                { id: 'ap-northeast-1', name: '日本 (东京)' },
-                { id: 'us-west-1', name: '美国 (硅谷)' },
-                { id: 'us-east-1', name: '美国 (弗吉尼亚)' },
-                { id: 'eu-central-1', name: '德国 (法兰克福)' },
-                { id: 'eu-west-1', name: '英国 (伦敦)' },
-                { id: 'ap-southeast-2', name: '澳大利亚 (悉尼)' },
-                { id: 'ap-southeast-3', name: '马来西亚 (吉隆坡)' },
-                { id: 'ap-southeast-5', name: '印度尼西亚 (雅加达)' },
-                { id: 'ap-southeast-6', name: '菲律宾 (马尼拉)' },
-                { id: 'ap-southeast-7', name: '泰国 (曼谷)' },
-                { id: 'ap-northeast-2', name: '韩国 (首尔)' },
-                { id: 'me-east-1', name: '阿联酋 (迪拜)' },
-                { id: 'cn-hangzhou', name: '华东1 (杭州)' },
-                { id: 'cn-shanghai', name: '华东2 (上海)' },
-                { id: 'cn-qingdao', name: '华北1 (青岛)' },
-                { id: 'cn-beijing', name: '华北2 (北京)' },
-                { id: 'cn-zhangjiakou', name: '华北3 (张家口)' },
-                { id: 'cn-huhehaote', name: '华北5 (呼和浩特)' },
-                { id: 'cn-wulanchabu', name: '华北6 (乌兰察布)' },
-                { id: 'cn-shenzhen', name: '华南1 (深圳)' },
-                { id: 'cn-heyuan', name: '华南2 (河源)' },
-                { id: 'cn-guangzhou', name: '华南3 (广州)' },
-                { id: 'cn-chengdu', name: '西南1 (成都)' }
-            ];
+                const cronWarning = ref(false);
 
-            const setupData = ref({
-                admin_password: '',
-                traffic_threshold: 95,
-                shutdown_mode: 'KeepCharging',
-                threshold_action: 'stop_and_notify',
-                keep_alive: false,
-                enable_schedule_email: false,
-                Notification: {
-                    email: '', host: '', port: 465, secure: 'ssl', username: '', password: ''
-                },
-                Accounts: []
-            });
+                // 图表相关
+                const showChartModal = ref(false);
+                const chartLoading = ref(false);
+                const chartMode = ref('24h');
+                const currentChartId = ref(0);
+                const currentChartAccount = ref('');
+                let chartInstance = null;
+                let currentChartData = {};
 
-            const checkInitStatus = async () => {
-                loadingCheckInit.value = true;
-                try {
-                    const res = await fetch('index.php?action=check_init');
-                    const data = await res.json();
-                    
-                    if (data.error) {
-                        criticalError.value = data.error;
+                // 阿里云地域数据
+                const aliyunRegions = [
+                    { id: 'cn-hongkong', name: '中国香港' },
+                    { id: 'ap-southeast-1', name: '新加坡' },
+                    { id: 'ap-northeast-1', name: '日本 (东京)' },
+                    { id: 'us-west-1', name: '美国 (硅谷)' },
+                    { id: 'us-east-1', name: '美国 (弗吉尼亚)' },
+                    { id: 'eu-central-1', name: '德国 (法兰克福)' },
+                    { id: 'eu-west-1', name: '英国 (伦敦)' },
+                    { id: 'ap-southeast-2', name: '澳大利亚 (悉尼)' },
+                    { id: 'ap-southeast-3', name: '马来西亚 (吉隆坡)' },
+                    { id: 'ap-southeast-5', name: '印度尼西亚 (雅加达)' },
+                    { id: 'ap-southeast-6', name: '菲律宾 (马尼拉)' },
+                    { id: 'ap-southeast-7', name: '泰国 (曼谷)' },
+                    { id: 'ap-northeast-2', name: '韩国 (首尔)' },
+                    { id: 'me-east-1', name: '阿联酋 (迪拜)' },
+                    { id: 'cn-hangzhou', name: '华东1 (杭州)' },
+                    { id: 'cn-shanghai', name: '华东2 (上海)' },
+                    { id: 'cn-qingdao', name: '华北1 (青岛)' },
+                    { id: 'cn-beijing', name: '华北2 (北京)' },
+                    { id: 'cn-zhangjiakou', name: '华北3 (张家口)' },
+                    { id: 'cn-huhehaote', name: '华北5 (呼和浩特)' },
+                    { id: 'cn-wulanchabu', name: '华北6 (乌兰察布)' },
+                    { id: 'cn-shenzhen', name: '华南1 (深圳)' },
+                    { id: 'cn-heyuan', name: '华南2 (河源)' },
+                    { id: 'cn-guangzhou', name: '华南3 (广州)' },
+                    { id: 'cn-chengdu', name: '西南1 (成都)' }
+                ];
+
+                const setupData = ref({
+                    admin_password: '',
+                    traffic_threshold: 95,
+                    shutdown_mode: 'KeepCharging',
+                    threshold_action: 'stop_and_notify',
+                    keep_alive: false,
+                    enable_schedule_email: false,
+                    Notification: {
+                        email: '', host: '', port: 465, secure: 'ssl', username: '', password: ''
+                    },
+                    Accounts: []
+                });
+
+                const checkInitStatus = async () => {
+                    loadingCheckInit.value = true;
+                    try {
+                        const res = await fetch('index.php?action=check_init');
+                        const data = await res.json();
+
+                        if (data.error) {
+                            criticalError.value = data.error;
+                            loading.value = false;
+                            return;
+                        }
+
+                        initialized.value = data.initialized;
+
+                        if (data.initialized) {
+                            checkLoginStatus();
+                        } else {
+                            loading.value = false;
+                        }
+                    } catch (e) {
+                        console.error('Init check failed', e);
+                        criticalError.value = "无法连接到服务器或响应格式错误。";
                         loading.value = false;
+                    } finally {
+                        loadingCheckInit.value = false;
+                    }
+                };
+
+                const performSetup = async () => {
+                    try {
+                        const res = await fetch('index.php?action=setup', {
+                            method: 'POST',
+                            body: JSON.stringify(setupData.value)
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            alert('系统初始化成功！');
+                            location.reload();
+                        } else {
+                            alert('初始化失败: ' + (data.message || '未知错误'));
+                        }
+                    } catch (e) {
+                        alert('网络请求失败');
+                    }
+                };
+
+                const checkLoginStatus = async () => {
+                    checkingLogin.value = true;
+                    try {
+                        const res = await fetch('index.php?action=check_login');
+                        const data = await res.json();
+                        if (data.logged_in) {
+                            isAdmin.value = true;
+                            fetchConfig();
+                            startLogPolling(); // 登录后开始轮询日志
+                        }
+                        fetchData();
+                    } catch (e) {
+                        console.error('Session check failed', e);
+                    } finally {
+                        checkingLogin.value = false;
+                    }
+                };
+
+                const fetchData = async () => {
+                    if (statusData.value.length === 0) loading.value = true;
+                    try {
+                        const res = await fetch('index.php?action=get_status');
+                        const json = await res.json();
+
+                        if (json.error) {
+                            criticalError.value = json.error;
+                        } else {
+                            statusData.value = json.data || [];
+                            if (json.system_last_run) {
+                                const now = Math.floor(Date.now() / 1000);
+                                const diff = now - json.system_last_run;
+                                cronWarning.value = diff > 180;
+                            } else {
+                                if (statusData.value.length > 0) cronWarning.value = true;
+                            }
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        statusData.value = [];
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                const refreshSingle = async (id, index) => {
+                    refreshingMap.value[index] = true;
+                    try {
+                        const res = await fetch('index.php?action=refresh_account', {
+                            method: 'POST',
+                            body: JSON.stringify({ id: id })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            await fetchData();
+                        }
+                    } catch (e) {
+                        console.error(e);
+                    } finally {
+                        refreshingMap.value[index] = false;
+                    }
+                };
+
+                // 图表功能
+                const openChart = async (id, accountName) => {
+                    showChartModal.value = true;
+                    chartLoading.value = true;
+                    currentChartId.value = id;
+                    currentChartAccount.value = accountName;
+                    chartMode.value = '24h';
+
+                    try {
+                        const res = await fetch(`index.php?action=get_history&id=${id}`);
+                        const json = await res.json();
+                        currentChartData = json.data || {};
+
+                        setTimeout(() => {
+                            initChart();
+                            renderChart();
+                            chartLoading.value = false;
+                        }, 100);
+
+                    } catch (e) {
+                        console.error('Fetch history failed', e);
+                        chartLoading.value = false;
+                    }
+                };
+
+                const initChart = () => {
+                    const dom = document.getElementById('echarts-container');
+                    if (chartInstance) {
+                        chartInstance.dispose();
+                    }
+                    chartInstance = echarts.init(dom);
+                    window.addEventListener('resize', () => chartInstance && chartInstance.resize());
+                };
+
+                const switchChartMode = (mode) => {
+                    chartMode.value = mode;
+                    renderChart();
+                };
+
+                const isChartEmpty = computed(() => {
+                    if (chartMode.value === '24h') {
+                        return !currentChartData.history_24h || currentChartData.history_24h.length === 0;
+                    } else {
+                        return !currentChartData.history_30d || currentChartData.history_30d.length === 0;
+                    }
+                });
+
+                const renderChart = () => {
+                    if (!chartInstance) return;
+
+                    let xData = [];
+                    let sData = [];
+                    let is30d = chartMode.value === '30d';
+
+                    if (is30d) {
+                        if (currentChartData.history_30d) {
+                            xData = currentChartData.history_30d.map(i => i.date);
+                            sData = currentChartData.history_30d.map(i => i.value);
+                        }
+                    } else {
+                        if (currentChartData.history_24h) {
+                            xData = currentChartData.history_24h.map(i => i.time);
+                            sData = currentChartData.history_24h.map(i => i.value);
+                        }
+                    }
+
+                    if (xData.length === 0) {
+                        chartInstance.clear();
                         return;
                     }
 
-                    initialized.value = data.initialized;
-                    
-                    if (data.initialized) {
-                        checkLoginStatus();
-                    } else {
-                        loading.value = false; 
-                    }
-                } catch (e) {
-                    console.error('Init check failed', e);
-                    criticalError.value = "无法连接到服务器或响应格式错误。";
-                    loading.value = false;
-                } finally {
-                    loadingCheckInit.value = false;
-                }
-            };
-
-            const performSetup = async () => {
-                try {
-                    const res = await fetch('index.php?action=setup', {
-                        method: 'POST',
-                        body: JSON.stringify(setupData.value)
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        alert('系统初始化成功！');
-                        location.reload(); 
-                    } else {
-                        alert('初始化失败: ' + (data.message || '未知错误'));
-                    }
-                } catch(e) {
-                    alert('网络请求失败');
-                }
-            };
-
-            const checkLoginStatus = async () => {
-                checkingLogin.value = true;
-                try {
-                    const res = await fetch('index.php?action=check_login');
-                    const data = await res.json();
-                    if (data.logged_in) {
-                        isAdmin.value = true;
-                        fetchConfig(); 
-                        startLogPolling(); // 登录后开始轮询日志
-                    }
-                    fetchData();
-                } catch (e) {
-                    console.error('Session check failed', e);
-                } finally {
-                    checkingLogin.value = false;
-                }
-            };
-
-            const fetchData = async () => {
-                if (statusData.value.length === 0) loading.value = true;
-                try {
-                    const res = await fetch('index.php?action=get_status');
-                    const json = await res.json();
-                    
-                    if (json.error) {
-                        criticalError.value = json.error;
-                    } else {
-                        statusData.value = json.data || [];
-                        if (json.system_last_run) {
-                            const now = Math.floor(Date.now() / 1000);
-                            const diff = now - json.system_last_run;
-                            cronWarning.value = diff > 180;
-                        } else {
-                             if (statusData.value.length > 0) cronWarning.value = true;
-                        }
-                    }
-                } catch (e) {
-                    console.error(e);
-                    statusData.value = [];
-                } finally {
-                    loading.value = false;
-                }
-            };
-
-            const refreshSingle = async (id, index) => {
-                refreshingMap.value[index] = true;
-                try {
-                    const res = await fetch('index.php?action=refresh_account', {
-                        method: 'POST',
-                        body: JSON.stringify({ id: id })
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        await fetchData(); 
-                    }
-                } catch (e) {
-                    console.error(e);
-                } finally {
-                    refreshingMap.value[index] = false;
-                }
-            };
-
-            // 图表功能
-            const openChart = async (id, accountName) => {
-                showChartModal.value = true;
-                chartLoading.value = true;
-                currentChartId.value = id;
-                currentChartAccount.value = accountName;
-                chartMode.value = '24h'; 
-
-                try {
-                    const res = await fetch(`index.php?action=get_history&id=${id}`);
-                    const json = await res.json();
-                    currentChartData = json.data || {};
-                    
-                    setTimeout(() => {
-                        initChart();
-                        renderChart();
-                        chartLoading.value = false;
-                    }, 100);
-                    
-                } catch(e) {
-                    console.error('Fetch history failed', e);
-                    chartLoading.value = false;
-                }
-            };
-
-            const initChart = () => {
-                const dom = document.getElementById('echarts-container');
-                if (chartInstance) {
-                    chartInstance.dispose();
-                }
-                chartInstance = echarts.init(dom);
-                window.addEventListener('resize', () => chartInstance && chartInstance.resize());
-            };
-
-            const switchChartMode = (mode) => {
-                chartMode.value = mode;
-                renderChart();
-            };
-
-            const isChartEmpty = computed(() => {
-                if (chartMode.value === '24h') {
-                    return !currentChartData.history_24h || currentChartData.history_24h.length === 0;
-                } else {
-                    return !currentChartData.history_30d || currentChartData.history_30d.length === 0;
-                }
-            });
-
-            const renderChart = () => {
-                if (!chartInstance) return;
-
-                let xData = [];
-                let sData = [];
-                let is30d = chartMode.value === '30d';
-
-                if (is30d) {
-                    if (currentChartData.history_30d) {
-                        xData = currentChartData.history_30d.map(i => i.date);
-                        sData = currentChartData.history_30d.map(i => i.value);
-                    }
-                } else {
-                    if (currentChartData.history_24h) {
-                        xData = currentChartData.history_24h.map(i => i.time);
-                        sData = currentChartData.history_24h.map(i => i.value);
-                    }
-                }
-
-                if (xData.length === 0) {
-                    chartInstance.clear();
-                    return;
-                }
-
-                const option = {
-                    tooltip: {
-                        trigger: 'axis',
-                        formatter: function(params) {
-                            const item = params[0];
-                            return `${item.name}<br/><span style="display:inline-block;margin-right:4px;border-radius:10px;width:10px;height:10px;background-color:${item.color};"></span>流量: <span style="font-weight:bold">${item.value}</span> GB`;
+                    const option = {
+                        tooltip: {
+                            trigger: 'axis',
+                            formatter: function (params) {
+                                const item = params[0];
+                                return `${item.name}<br/><span style="display:inline-block;margin-right:4px;border-radius:10px;width:10px;height:10px;background-color:${item.color};"></span>流量: <span style="font-weight:bold">${item.value}</span> GB`;
+                            },
+                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                            borderColor: '#E5E7EB',
+                            textStyle: { color: '#1F2937' }
                         },
-                        backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                        borderColor: '#E5E7EB',
-                        textStyle: { color: '#1F2937' }
-                    },
-                    grid: {
-                        left: '2%', right: '3%', bottom: '3%', top: '12%',
-                        containLabel: true
-                    },
-                    xAxis: {
-                        type: 'category',
-                        boundaryGap: is30d, 
-                        data: xData,
-                        axisLine: { lineStyle: { color: '#E5E7EB' } },
-                        axisLabel: { color: '#6B7280', fontSize: 11 },
-                        axisTick: { show: false }
-                    },
-                    yAxis: {
-                        type: 'value',
-                        name: '流量 (GB)',
-                        nameTextStyle: { color: '#9CA3AF', padding: [0, 0, 0, 20] },
-                        splitLine: { lineStyle: { type: 'dashed', color: '#F3F4F6' } },
-                        axisLabel: { color: '#6B7280', fontSize: 11 }
-                    },
-                    series: [{
-                        data: sData,
-                        type: is30d ? 'bar' : 'line',
-                        smooth: true,
-                        barMaxWidth: 30,
-                        itemStyle: { 
-                            color: is30d ? new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                { offset: 0, color: '#1C1C1E' },
-                                { offset: 1, color: '#4B5563' }
-                            ]) : '#007AFF',
-                            borderRadius: is30d ? [4, 4, 0, 0] : 0
+                        grid: {
+                            left: '2%', right: '3%', bottom: '3%', top: '12%',
+                            containLabel: true
                         },
-                        lineStyle: is30d ? {} : {
-                            width: 3,
-                            shadowColor: 'rgba(0, 122, 255, 0.3)',
-                            shadowBlur: 10
+                        xAxis: {
+                            type: 'category',
+                            boundaryGap: is30d,
+                            data: xData,
+                            axisLine: { lineStyle: { color: '#E5E7EB' } },
+                            axisLabel: { color: '#6B7280', fontSize: 11 },
+                            axisTick: { show: false }
                         },
-                        areaStyle: is30d ? null : {
-                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                { offset: 0, color: 'rgba(0,122,255,0.2)' },
-                                { offset: 1, color: 'rgba(0,122,255,0.0)' }
-                            ])
+                        yAxis: {
+                            type: 'value',
+                            name: '流量 (GB)',
+                            nameTextStyle: { color: '#9CA3AF', padding: [0, 0, 0, 20] },
+                            splitLine: { lineStyle: { type: 'dashed', color: '#F3F4F6' } },
+                            axisLabel: { color: '#6B7280', fontSize: 11 }
                         },
-                        showSymbol: !is30d,
-                        symbolSize: 6
-                    }]
+                        series: [{
+                            data: sData,
+                            type: is30d ? 'bar' : 'line',
+                            smooth: true,
+                            barMaxWidth: 30,
+                            itemStyle: {
+                                color: is30d ? new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    { offset: 0, color: '#1C1C1E' },
+                                    { offset: 1, color: '#4B5563' }
+                                ]) : '#007AFF',
+                                borderRadius: is30d ? [4, 4, 0, 0] : 0
+                            },
+                            lineStyle: is30d ? {} : {
+                                width: 3,
+                                shadowColor: 'rgba(0, 122, 255, 0.3)',
+                                shadowBlur: 10
+                            },
+                            areaStyle: is30d ? null : {
+                                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                    { offset: 0, color: 'rgba(0,122,255,0.2)' },
+                                    { offset: 1, color: 'rgba(0,122,255,0.0)' }
+                                ])
+                            },
+                            showSymbol: !is30d,
+                            symbolSize: 6
+                        }]
+                    };
+
+                    chartInstance.setOption(option, true);
                 };
 
-                chartInstance.setOption(option, true);
-            };
+                const closeChart = () => {
+                    showChartModal.value = false;
+                    if (chartInstance) {
+                        chartInstance.dispose();
+                        chartInstance = null;
+                    }
+                };
 
-            const closeChart = () => {
-                showChartModal.value = false;
-                if(chartInstance) {
-                    chartInstance.dispose();
-                    chartInstance = null;
-                }
-            };
-
-            const toggleAdmin = () => {
-                if (isAdmin.value) {
-                    fetch('index.php?action=logout').then(() => {
-                        isAdmin.value = false;
-                        config.value = null;
-                        systemLogs.value = []; 
-                        stopLogPolling();
-                    });
-                } else {
-                    showLoginModal.value = true;
-                }
-            };
-
-            const performLogin = async () => {
-                try {
-                    const res = await fetch('index.php?action=login', {
-                        method: 'POST',
-                        body: JSON.stringify({ password: passwordInput.value })
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        isAdmin.value = true;
-                        showLoginModal.value = false;
-                        passwordInput.value = '';
-                        fetchConfig();
-                        startLogPolling();
+                const toggleAdmin = () => {
+                    if (isAdmin.value) {
+                        fetch('index.php?action=logout').then(() => {
+                            isAdmin.value = false;
+                            config.value = null;
+                            systemLogs.value = [];
+                            stopLogPolling();
+                        });
                     } else {
-                        alert(data.message || '登录失败'); 
+                        showLoginModal.value = true;
                     }
-                } catch(e) {
-                    alert('登录请求失败');
-                }
-            };
+                };
 
-            const fetchConfig = async () => {
-                try {
-                    const res = await fetch('index.php?action=get_config');
-                    const data = await res.json();
-                    if (!data.Accounts) data.Accounts = [];
-                    data.Accounts.forEach(acc => {
-                        if(!acc.schedule) acc.schedule = { enabled: false, startTime: '', stopTime: '' };
-                        if(typeof acc.maxTraffic === 'undefined') acc.maxTraffic = 200;
-                        if(typeof acc.remark === 'undefined') acc.remark = '';
-                    });
-                    if (!data.Notification) data.Notification = { email: '', host: '', port: 465, secure: 'ssl', username: '', password: '' };
-                    config.value = data;
-                } catch(e) { console.error(e); }
-            };
-
-            const saveConfig = async () => {
-                if (!config.value) return;
-                try {
-                    const res = await fetch('index.php?action=save_config', { method: 'POST', body: JSON.stringify(config.value) });
-                    const data = await res.json();
-                    if (data.success) { alert('配置已保存'); fetchData(); } else { alert('保存失败'); }
-                } catch(e) { alert('保存请求失败'); }
-            };
-
-            // 获取系统日志 (带Tab参数)
-            const fetchLogs = async () => {
-                if (!isAdmin.value) return;
-                try {
-                    const res = await fetch(`index.php?action=get_logs&tab=${currentLogTab.value}`);
-                    const data = await res.json();
-                    if (data.data) {
-                        systemLogs.value = data.data;
+                const performLogin = async () => {
+                    try {
+                        const res = await fetch('index.php?action=login', {
+                            method: 'POST',
+                            body: JSON.stringify({ password: passwordInput.value })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            isAdmin.value = true;
+                            showLoginModal.value = false;
+                            passwordInput.value = '';
+                            fetchConfig();
+                            startLogPolling();
+                        } else {
+                            alert(data.message || '登录失败');
+                        }
+                    } catch (e) {
+                        alert('登录请求失败');
                     }
-                } catch (e) { console.error('Fetch logs failed', e); }
-            };
-            
-            // 清空日志
-            const clearLogs = async () => {
-                if(!confirm(`确定清空"${currentLogTab.value === 'action' ? '动作' : '心跳'}"日志吗？`)) return;
-                try {
-                    const res = await fetch('index.php?action=clear_logs', {
-                        method: 'POST',
-                        body: JSON.stringify({ tab: currentLogTab.value })
-                    });
-                    const data = await res.json();
-                    if (data.success) {
-                        fetchLogs();
+                };
+
+                const fetchConfig = async () => {
+                    try {
+                        const res = await fetch('index.php?action=get_config');
+                        const data = await res.json();
+                        if (!data.Accounts) data.Accounts = [];
+                        data.Accounts.forEach(acc => {
+                            if (!acc.schedule) acc.schedule = { enabled: false, startTime: '', stopTime: '' };
+                            if (typeof acc.maxTraffic === 'undefined') acc.maxTraffic = 200;
+                            if (typeof acc.remark === 'undefined') acc.remark = '';
+                        });
+                        if (!data.Notification) data.Notification = { email: '', host: '', port: 465, secure: 'ssl', username: '', password: '' };
+                        config.value = data;
+                    } catch (e) { console.error(e); }
+                };
+
+                const saveConfig = async () => {
+                    if (!config.value) return;
+                    try {
+                        const res = await fetch('index.php?action=save_config', { method: 'POST', body: JSON.stringify(config.value) });
+                        const data = await res.json();
+                        if (data.success) { alert('配置已保存'); fetchData(); } else { alert('保存失败'); }
+                    } catch (e) { alert('保存请求失败'); }
+                };
+
+                // 获取系统日志 (带Tab参数)
+                const fetchLogs = async () => {
+                    if (!isAdmin.value) return;
+                    try {
+                        const res = await fetch(`index.php?action=get_logs&tab=${currentLogTab.value}`);
+                        const data = await res.json();
+                        if (data.data) {
+                            systemLogs.value = data.data;
+                        }
+                    } catch (e) { console.error('Fetch logs failed', e); }
+                };
+
+                // 清空日志
+                const clearLogs = async () => {
+                    if (!confirm(`确定清空"${currentLogTab.value === 'action' ? '动作' : '心跳'}"日志吗？`)) return;
+                    try {
+                        const res = await fetch('index.php?action=clear_logs', {
+                            method: 'POST',
+                            body: JSON.stringify({ tab: currentLogTab.value })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            fetchLogs();
+                        }
+                    } catch (e) { console.error(e); }
+                };
+
+                const startLogPolling = () => {
+                    fetchLogs(); // 立即执行一次
+                    logAutoRefresh.value = true;
+                    if (logInterval) clearInterval(logInterval);
+                    logInterval = setInterval(fetchLogs, 3000); // 3秒刷新一次
+                };
+
+                const stopLogPolling = () => {
+                    logAutoRefresh.value = false;
+                    if (logInterval) {
+                        clearInterval(logInterval);
+                        logInterval = null;
                     }
-                } catch (e) { console.error(e); }
-            };
-            
-            const startLogPolling = () => {
-                fetchLogs(); // 立即执行一次
-                logAutoRefresh.value = true;
-                if (logInterval) clearInterval(logInterval);
-                logInterval = setInterval(fetchLogs, 3000); // 3秒刷新一次
-            };
-            
-            const stopLogPolling = () => {
-                logAutoRefresh.value = false;
-                if (logInterval) {
-                    clearInterval(logInterval);
-                    logInterval = null;
-                }
-            };
+                };
 
-            const sendTestEmail = async () => {
-                if (!config.value || !config.value.Notification.email) { alert('请先填写接收邮箱并保存配置'); return; }
-                if(!confirm('发送测试邮件将使用已保存的配置。继续发送吗？')) { return; }
-                sendingEmail.value = true;
-                try {
-                    const res = await fetch('index.php?action=send_test_email', { method: 'POST', body: JSON.stringify({ email: config.value.Notification.email }) });
-                    const data = await res.json();
-                    if (data.success) { alert('邮件发送成功！'); } else { alert('邮件发送失败'); }
-                } catch(e) { alert('发送请求失败'); } finally { sendingEmail.value = false; }
-            };
+                const sendTestEmail = async () => {
+                    if (!config.value || !config.value.Notification.email) { alert('请先填写接收邮箱并保存配置'); return; }
+                    if (!confirm('发送测试邮件将使用已保存的配置。继续发送吗？')) { return; }
+                    sendingEmail.value = true;
+                    try {
+                        const res = await fetch('index.php?action=send_test_email', { method: 'POST', body: JSON.stringify({ email: config.value.Notification.email }) });
+                        const data = await res.json();
+                        if (data.success) { alert('邮件发送成功！'); } else { alert('邮件发送失败'); }
+                    } catch (e) { alert('发送请求失败'); } finally { sendingEmail.value = false; }
+                };
 
-            const addAccount = () => {
-                if(!config.value.Accounts) config.value.Accounts = [];
-                config.value.Accounts.push({ AccessKeyId: '', AccessKeySecret: '', maxTraffic: 200, regionId: '', instanceId: '', remark: '', schedule: { enabled: false, startTime: '', stopTime: '' } });
-            };
+                const addAccount = () => {
+                    if (!config.value.Accounts) config.value.Accounts = [];
+                    config.value.Accounts.push({ AccessKeyId: '', AccessKeySecret: '', maxTraffic: 200, regionId: '', instanceId: '', remark: '', schedule: { enabled: false, startTime: '', stopTime: '' } });
+                };
 
-            const removeAccount = (index) => { if(confirm('确定删除该账号配置？')) config.value.Accounts.splice(index, 1); };
-            
-            const getInstanceStatusColor = (status) => {
-                const map = { 'Running': 'text-green-500', 'Stopped': 'text-red-500', 'Starting': 'text-yellow-500', 'Stopping': 'text-yellow-500' };
-                return map[status] || 'text-gray-400';
-            };
+                const removeAccount = (index) => { if (confirm('确定删除该账号配置？')) config.value.Accounts.splice(index, 1); };
 
-            onMounted(() => {
-                checkInitStatus();
-            });
-            
-            onUnmounted(() => {
-                stopLogPolling();
-            });
+                const getInstanceStatusColor = (status) => {
+                    const map = { 'Running': 'text-green-500', 'Stopped': 'text-red-500', 'Starting': 'text-yellow-500', 'Stopping': 'text-yellow-500' };
+                    return map[status] || 'text-gray-400';
+                };
 
-            return {
-                statusData, loading, isAdmin, checkingLogin, showLoginModal, passwordInput, config, initialized, loadingCheckInit, setupData, criticalError,
-                regionSearchFocus, aliyunRegions, refreshingMap, systemLogs, cronWarning,
-                showChartModal, chartLoading, chartMode, currentChartAccount, openChart, closeChart, switchChartMode, isChartEmpty,
-                toggleAdmin, performLogin, saveConfig, sendTestEmail, sendingEmail, addAccount, removeAccount, getInstanceStatusColor, performSetup, refreshSingle, fetchLogs,
-                currentLogTab, clearLogs, logAutoRefresh
-            };
-        }
-    }).mount('#app');
-</script>
+                onMounted(() => {
+                    checkInitStatus();
+                });
+
+                onUnmounted(() => {
+                    stopLogPolling();
+                });
+
+                return {
+                    statusData, loading, isAdmin, checkingLogin, showLoginModal, passwordInput, config, initialized, loadingCheckInit, setupData, criticalError,
+                    regionSearchFocus, aliyunRegions, refreshingMap, systemLogs, cronWarning,
+                    showChartModal, chartLoading, chartMode, currentChartAccount, openChart, closeChart, switchChartMode, isChartEmpty,
+                    toggleAdmin, performLogin, saveConfig, sendTestEmail, sendingEmail, addAccount, removeAccount, getInstanceStatusColor, performSetup, refreshSingle, fetchLogs,
+                    currentLogTab, clearLogs, logAutoRefresh
+                };
+            }
+        }).mount('#app');
+    </script>
 </body>
+
 </html>
