@@ -125,6 +125,7 @@ class Database
         $this->ensureColumn('accounts', 'instance_status', "TEXT DEFAULT 'Unknown'");
         $this->ensureColumn('accounts', 'updated_at', 'INTEGER DEFAULT 0');
         $this->ensureColumn('accounts', 'last_keep_alive_at', 'INTEGER DEFAULT 0');
+        $this->ensureColumn('accounts', 'remark', "TEXT DEFAULT ''");
 
         $this->migrateStatsToAccountId();
     }

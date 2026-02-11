@@ -137,7 +137,8 @@ class AliyunTrafficCheck
                     'enabled' => $row['schedule_enabled'] == 1,
                     'startTime' => $row['start_time'],
                     'stopTime' => $row['stop_time']
-                ]
+                ],
+                'remark' => $row['remark'] ?? ''
             ];
         }
 
@@ -479,7 +480,8 @@ class AliyunTrafficCheck
                 'rate95' => $isFull,
                 'threshold' => $threshold,
                 'instanceStatus' => $status,
-                'lastUpdated' => date('Y-m-d H:i:s', $lastUpdate > 0 ? $lastUpdate : $currentTime)
+                'lastUpdated' => date('Y-m-d H:i:s', $lastUpdate > 0 ? $lastUpdate : $currentTime),
+                'remark' => $account['remark'] ?? ''
             ];
         }
 

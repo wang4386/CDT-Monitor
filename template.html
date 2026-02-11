@@ -172,6 +172,10 @@
                     <span class="text-sm font-medium text-gray-500">账号</span>
                     <span class="text-sm font-medium text-[#1C1C1E] font-mono">{{ item.account }}</span>
                 </div>
+                <div v-if="item.remark" class="flex justify-between items-center">
+                    <span class="text-sm font-medium text-gray-500">备注</span>
+                    <span class="text-sm font-medium text-[#1C1C1E]">{{ item.remark }}</span>
+                </div>
                  <div class="flex justify-between items-center">
                     <span class="text-xs font-medium text-gray-400">当前阈值</span>
                     <span class="text-xs font-medium text-gray-400">{{ item.threshold }}%</span>
@@ -480,6 +484,11 @@
                                     <label class="text-xs font-medium text-gray-500 ml-2">Max Traffic (GB)</label>
                                     <input v-model.number="acc.maxTraffic" type="number" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
                                 </div>
+                            </div>
+
+                            <div class="mt-4 space-y-1">
+                                <label class="text-xs font-medium text-gray-500 ml-2">备注 <span class="text-gray-400">(可选)</span></label>
+                                <input v-model="acc.remark" placeholder="为该实例添加备注说明" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
                             </div>
 
                             <div class="mt-6 pt-4 border-t border-gray-200/50">
@@ -954,6 +963,7 @@
                     data.Accounts.forEach(acc => {
                         if(!acc.schedule) acc.schedule = { enabled: false, startTime: '', stopTime: '' };
                         if(typeof acc.maxTraffic === 'undefined') acc.maxTraffic = 200;
+                        if(typeof acc.remark === 'undefined') acc.remark = '';
                     });
                     if (!data.Notification) data.Notification = { email: '', host: '', port: 465, secure: 'ssl', username: '', password: '' };
                     config.value = data;
@@ -1024,7 +1034,7 @@
 
             const addAccount = () => {
                 if(!config.value.Accounts) config.value.Accounts = [];
-                config.value.Accounts.push({ AccessKeyId: '', AccessKeySecret: '', maxTraffic: 200, regionId: '', instanceId: '', schedule: { enabled: false, startTime: '', stopTime: '' } });
+                config.value.Accounts.push({ AccessKeyId: '', AccessKeySecret: '', maxTraffic: 200, regionId: '', instanceId: '', remark: '', schedule: { enabled: false, startTime: '', stopTime: '' } });
             };
 
             const removeAccount = (index) => { if(confirm('确定删除该账号配置？')) config.value.Accounts.splice(index, 1); };
