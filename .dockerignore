@@ -6,3 +6,9 @@ docker-compose.yml
 Dockerfile
 README.MD
 LICENSE
+node_modules
+package.json
+package-lock.json
+build-css.ps1
+static/input.css
+static/tailwindcss-browser.js

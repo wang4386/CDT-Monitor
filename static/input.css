@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+    /* 字体配置 */
+    --font-sans: 'Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif';
+
+    /* 颜色配置 (对应原 config.colors.ios) */
+    --color-ios-bg: #F2F2F7;
+    --color-ios-card: rgba(255, 255, 255, 0.72);
+    --color-ios-blue: #007AFF;
+    --color-ios-black: #1C1C1E;
+    --color-ios-red: #FF3B30;
+    --color-ios-green: #34C759;
+    --color-ios-gray: #8E8E93;
+
+    /* 背景模糊扩展 */
+    --backdrop-blur-xs: 2px;
+
+    /* 动画扩展 */
+    --animate-spin-slow: spin 1.5s linear infinite;
+}

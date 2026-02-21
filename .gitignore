@@ -11,3 +11,7 @@ Thumbs.db
 /.settings
 /.buildpath
 /.project
+/node_modules
+package.json
+package-lock.json
+static/tailwindcss-browser.js
