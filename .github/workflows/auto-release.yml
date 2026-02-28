@@ -1,0 +1,48 @@
+name: Auto Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Need full history to list tags
+
+      - name: Generate next version tag
+        id: generate_tag
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LATEST_TAG" ]; then
+            NEXT_TAG="v1.6.0"
+          else
+            # Extract major.minor.patch
+            if [[ "$LATEST_TAG" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              MAJOR="${BASH_REMATCH[1]}"
+              MINOR="${BASH_REMATCH[2]}"
+              PATCH="${BASH_REMATCH[3]}"
+              NEXT_TAG="v${MAJOR}.${MINOR}.$((PATCH + 1))"
+            else
+              # Fallback if the previous tag format isn't standard
+              NEXT_TAG="v1.6.0"
+            fi
+          fi
+          echo "tag=$NEXT_TAG" >> $GITHUB_OUTPUT
+
+      - name: Create or Update Release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.generate_tag.outputs.tag }}
+          name: "Release ${{ steps.generate_tag.outputs.tag }}"
+          body: "Auto-generated release for the latest commit."
+          allowUpdates: false
+          makeLatest: true
+          token: ${{ secrets.GITHUB_TOKEN }}
