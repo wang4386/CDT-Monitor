@@ -469,9 +469,42 @@
                         </div>
                     </div>
 
-                    <div class="glass-panel rounded-[32px] p-6 z-10">
-                        <h3 class="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4">邮件服务器配置</h3>
-                        <div class="space-y-3">
+                    <div class="glass-panel rounded-[32px] p-6 z-10 flex flex-col">
+                        <h3 class="text-sm font-bold uppercase tracking-widest text-gray-400 mb-4">通知配置</h3>
+
+                        <!-- Tabs -->
+                        <div class="flex bg-gray-100/80 p-1 rounded-xl mb-4 overflow-x-auto no-scrollbar">
+                            <button @click="currentNotifyTab = 'email'"
+                                class="flex-1 whitespace-nowrap px-3 py-1.5 text-xs font-bold rounded-lg transition-all"
+                                :class="currentNotifyTab === 'email' ? 'bg-white text-[#1C1C1E] shadow-sm' : 'text-gray-400 hover:text-gray-600'">
+                                邮件推送
+                            </button>
+                            <button @click="currentNotifyTab = 'telegram'"
+                                class="flex-1 whitespace-nowrap px-3 py-1.5 text-xs font-bold rounded-lg transition-all"
+                                :class="currentNotifyTab === 'telegram' ? 'bg-white text-[#1C1C1E] shadow-sm' : 'text-gray-400 hover:text-gray-600'">
+                                Telegram Bot
+                            </button>
+                            <button @click="currentNotifyTab = 'webhook'"
+                                class="flex-1 whitespace-nowrap px-3 py-1.5 text-xs font-bold rounded-lg transition-all"
+                                :class="currentNotifyTab === 'webhook' ? 'bg-white text-[#1C1C1E] shadow-sm' : 'text-gray-400 hover:text-gray-600'">
+                                Webhook
+                            </button>
+                        </div>
+
+                        <!-- Email Tab -->
+                        <div v-show="currentNotifyTab === 'email'" class="space-y-3 animate-fade-in flex-1">
+                            <div class="flex items-center justify-between pb-2 border-b border-gray-100">
+                                <span class="text-xs font-bold text-gray-700 ml-2">启用邮件推送</span>
+                                <div class="relative inline-block w-10 mr-2">
+                                    <input type="checkbox" v-model="config.Notification.email_enabled" id="toggle-email"
+                                        class="peer sr-only" />
+                                    <label for="toggle-email"
+                                        class="block overflow-hidden h-5 w-10 rounded-full bg-gray-300 cursor-pointer transition-colors peer-checked:bg-[#1C1C1E]"></label>
+                                    <div
+                                        class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5">
+                                    </div>
+                                </div>
+                            </div>
                             <div class="space-y-1">
                                 <label class="text-xs font-medium text-gray-500 ml-2">SMTP Host</label>
                                 <input v-model="config.Notification.host"
@@ -480,13 +513,13 @@
                             <div class="grid grid-cols-2 gap-3">
                                 <div class="space-y-1">
                                     <label class="text-xs font-medium text-gray-500 ml-2">Port</label>
-                                    <input v-model="config.Notification.port" type="number"
+                                    <input v-model.number="config.Notification.port" type="number"
                                         class="w-full glass-input rounded-xl px-4 py-2 text-sm">
                                 </div>
                                 <div class="space-y-1">
                                     <label class="text-xs font-medium text-gray-500 ml-2">Secure</label>
                                     <select v-model="config.Notification.secure"
-                                        class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none">
+                                        class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none cursor-pointer">
                                         <option value="ssl">SSL</option>
                                         <option value="tls">TLS</option>
                                         <option value="">无 (None)</option>
@@ -509,10 +542,150 @@
                                     class="w-full glass-input rounded-xl px-4 py-2 text-sm">
                             </div>
 
-                            <div class="pt-4">
+                            <div class="pt-4 mt-auto">
                                 <button @click="sendTestEmail" :disabled="sendingEmail"
                                     class="w-full border border-gray-300 text-gray-600 py-2 rounded-xl text-xs font-semibold hover:bg-gray-50 transition disabled:opacity-50">
-                                    {{ sendingEmail ? '发送中...' : '发送测试邮件' }}
+                                    {{ sendingEmail ? '发送中...' : '发送测试消息' }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Telegram Tab -->
+                        <div v-show="currentNotifyTab === 'telegram'" class="space-y-3 animate-fade-in flex-1">
+                            <div class="flex items-center justify-between pb-2 border-b border-gray-100">
+                                <span class="text-xs font-bold text-gray-700 ml-2">启用 Telegram 推送</span>
+                                <div class="relative inline-block w-10 mr-2">
+                                    <input type="checkbox" v-model="config.Notification.telegram.enabled" id="toggle-tg"
+                                        class="peer sr-only" />
+                                    <label for="toggle-tg"
+                                        class="block overflow-hidden h-5 w-10 rounded-full bg-gray-300 cursor-pointer transition-colors peer-checked:bg-[#1C1C1E]"></label>
+                                    <div
+                                        class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-gray-500 ml-2">Bot Token</label>
+                                <input v-model="config.Notification.telegram.token" placeholder="来自 @BotFather"
+                                    class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-gray-500 ml-2">Chat ID</label>
+                                <input v-model="config.Notification.telegram.chat_id" placeholder="数字 ID"
+                                    class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-gray-500 ml-2">代理服务器类型</label>
+                                <select v-model="config.Notification.telegram.proxy_type"
+                                    class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none cursor-pointer">
+                                    <option value="none">不使用代理</option>
+                                    <option value="custom">自定义反代 URL</option>
+                                    <option value="socks5">SOCKS5 代理</option>
+                                </select>
+                            </div>
+
+                            <div v-if="config.Notification.telegram.proxy_type === 'custom'"
+                                class="space-y-1 animate-fade-in">
+                                <label class="text-xs font-medium text-gray-500 ml-2">自定义反代 URL</label>
+                                <input v-model="config.Notification.telegram.proxy_url"
+                                    placeholder="默认: https://api.telegram.org"
+                                    class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                            </div>
+
+                            <div v-if="config.Notification.telegram.proxy_type === 'socks5'"
+                                class="grid grid-cols-2 gap-3 animate-fade-in">
+                                <div class="space-y-1">
+                                    <label class="text-xs font-medium text-gray-500 ml-2">代理 IP</label>
+                                    <input v-model="config.Notification.telegram.proxy_ip" placeholder="127.0.0.1"
+                                        class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-xs font-medium text-gray-500 ml-2">代理端口</label>
+                                    <input v-model="config.Notification.telegram.proxy_port" placeholder="1080"
+                                        class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-xs font-medium text-gray-500 ml-2">代理账号</label>
+                                    <input v-model="config.Notification.telegram.proxy_user" placeholder="留空无验证"
+                                        class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-xs font-medium text-gray-500 ml-2">代理密码</label>
+                                    <input v-model="config.Notification.telegram.proxy_pass" type="password"
+                                        placeholder="留空无验证" class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                                </div>
+                            </div>
+
+                            <div class="pt-4 mt-auto">
+                                <button @click="sendTestTelegram" :disabled="testingTelegram"
+                                    class="w-full border border-gray-300 text-gray-600 py-2 rounded-xl text-xs font-semibold hover:bg-gray-50 transition disabled:opacity-50">
+                                    {{ testingTelegram ? '发送中...' : '发送测试消息' }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Webhook Tab -->
+                        <div v-show="currentNotifyTab === 'webhook'" class="space-y-3 animate-fade-in flex-1">
+                            <div class="flex items-center justify-between pb-2 border-b border-gray-100">
+                                <span class="text-xs font-bold text-gray-700 ml-2">启用 Webhook 推送</span>
+                                <div class="relative inline-block w-10 mr-2">
+                                    <input type="checkbox" v-model="config.Notification.webhook.enabled" id="toggle-wh"
+                                        class="peer sr-only" />
+                                    <label for="toggle-wh"
+                                        class="block overflow-hidden h-5 w-10 rounded-full bg-gray-300 cursor-pointer transition-colors peer-checked:bg-[#1C1C1E]"></label>
+                                    <div
+                                        class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-5">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-gray-500 ml-2">Webhook URL</label>
+                                <input v-model="config.Notification.webhook.url"
+                                    placeholder="http://example.com/api/notify"
+                                    class="w-full glass-input rounded-xl px-4 py-2 text-sm">
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="space-y-1">
+                                    <label class="text-xs font-medium text-gray-500 ml-2">请求方式 (Method)</label>
+                                    <select v-model="config.Notification.webhook.method"
+                                        class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none cursor-pointer">
+                                        <option value="GET">GET</option>
+                                        <option value="POST">POST</option>
+                                    </select>
+                                </div>
+                                <div class="space-y-1" v-if="config.Notification.webhook.method === 'POST'">
+                                    <label class="text-xs font-medium text-gray-500 ml-2">请求类型 (Type)</label>
+                                    <select v-model="config.Notification.webhook.request_type"
+                                        class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none cursor-pointer">
+                                        <option value="JSON">JSON</option>
+                                        <option value="FORM">Form (urlencoded)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="space-y-1 pt-2">
+                                <label class="text-[11px] font-bold text-gray-700 ml-2">自定义 Headers (JSON格式，可选)</label>
+                                <textarea v-model="config.Notification.webhook.headers"
+                                    placeholder='{"Authorization": "Bearer token", "Content-Type": "application/json"}'
+                                    class="w-full glass-input rounded-xl px-4 py-2 text-xs font-mono min-h-[60px]"></textarea>
+                            </div>
+
+                            <div class="space-y-1">
+                                <label class="text-[11px] font-bold text-gray-700 ml-2">自定义 Body 模板 (可选)</label>
+                                <textarea v-model="config.Notification.webhook.body"
+                                    placeholder='{"title": "#TITLE#", "content": "#MSG#", "traffic": "#TRAFFIC#"}'
+                                    class="w-full glass-input rounded-xl px-4 py-2 text-xs font-mono min-h-[100px]"></textarea>
+                                <p class="text-[10px] text-gray-400 mt-1 px-1 leading-tight">
+                                    可用变量: <code>#TITLE#</code> (标题), <code>#MSG#</code> (内容), <code>#ACCOUNT#</code> (账号
+                                    ID), <code>#TRAFFIC#</code> (使用流量), <code>#MAX_TRAFFIC#</code> (阈值流量)<br />
+                                    GET 请求的变量可直接写在 URL 中，或留空 Body。<br>POST 请求若留空 Body 将发送默认 JSON 或 Form 载荷。
+                                </p>
+                            </div>
+
+                            <div class="pt-4 mt-auto">
+                                <button @click="sendTestWebhook" :disabled="testingWebhook"
+                                    class="w-full border border-gray-300 text-gray-600 py-2 rounded-xl text-xs font-semibold hover:bg-gray-50 transition disabled:opacity-50">
+                                    {{ testingWebhook ? '发送中...' : '发送测试消息' }}
                                 </button>
                             </div>
                         </div>
@@ -768,6 +941,11 @@
 
                 const cronWarning = ref(false);
 
+                // 通知相关
+                const currentNotifyTab = ref('email');
+                const testingTelegram = ref(false);
+                const testingWebhook = ref(false);
+
                 // 图表相关
                 const showChartModal = ref(false);
                 const chartLoading = ref(false);
@@ -814,7 +992,9 @@
                     keep_alive: false,
                     enable_schedule_email: false,
                     Notification: {
-                        email: '', host: '', port: 465, secure: 'ssl', username: '', password: ''
+                        email_enabled: true, email: '', host: '', port: 465, secure: 'ssl', username: '', password: '',
+                        telegram: { enabled: false, token: '', chat_id: '', proxy_type: 'none', proxy_url: '', proxy_ip: '', proxy_port: '', proxy_user: '', proxy_pass: '' },
+                        webhook: { enabled: false, url: '', method: 'GET', request_type: 'JSON', headers: '', body: '' }
                     },
                     Accounts: []
                 });
@@ -1127,7 +1307,25 @@
                             if (typeof acc.maxTraffic === 'undefined') acc.maxTraffic = 200;
                             if (typeof acc.remark === 'undefined') acc.remark = '';
                         });
-                        if (!data.Notification) data.Notification = { email: '', host: '', port: 465, secure: 'ssl', username: '', password: '' };
+
+                        if (!data.Notification) {
+                            data.Notification = {
+                                email_enabled: true, email: '', host: '', port: 465, secure: 'ssl', username: '', password: '',
+                                telegram: { enabled: false, token: '', chat_id: '', proxy_type: 'none', proxy_url: '', proxy_ip: '', proxy_port: '', proxy_user: '', proxy_pass: '' },
+                                webhook: { enabled: false, url: '', method: 'GET' }
+                            };
+                        } else {
+                            if (typeof data.Notification.email_enabled === 'undefined') data.Notification.email_enabled = true;
+                            if (!data.Notification.telegram) data.Notification.telegram = { enabled: false, token: '', chat_id: '', proxy_type: 'none', proxy_url: '', proxy_ip: '', proxy_port: '', proxy_user: '', proxy_pass: '' };
+                            if (!data.Notification.webhook) {
+                                data.Notification.webhook = { enabled: false, url: '', method: 'GET', request_type: 'JSON', headers: '', body: '' };
+                            } else {
+                                if (!data.Notification.webhook.request_type) data.Notification.webhook.request_type = 'JSON';
+                                if (typeof data.Notification.webhook.headers === 'undefined') data.Notification.webhook.headers = '';
+                                if (typeof data.Notification.webhook.body === 'undefined') data.Notification.webhook.body = '';
+                            }
+                        }
+
                         config.value = data;
                     } catch (e) { console.error(e); }
                 };
@@ -1190,8 +1388,28 @@
                     try {
                         const res = await fetch('index.php?action=send_test_email', { method: 'POST', body: JSON.stringify({ email: config.value.Notification.email }) });
                         const data = await res.json();
-                        if (data.success) { alert('邮件发送成功！'); } else { alert('邮件发送失败'); }
+                        if (data.success) { alert('邮件发送成功！'); } else { alert('邮件发送失败: ' + data.message); }
                     } catch (e) { alert('发送请求失败'); } finally { sendingEmail.value = false; }
+                };
+
+                const sendTestTelegram = async () => {
+                    if (!config.value || !config.value.Notification.telegram.token || !config.value.Notification.telegram.chat_id) { alert('请先填写Token和Chat ID，建议保存后再测试'); return; }
+                    testingTelegram.value = true;
+                    try {
+                        const res = await fetch('index.php?action=send_test_telegram', { method: 'POST', body: JSON.stringify({ telegram: config.value.Notification.telegram }) });
+                        const data = await res.json();
+                        if (data.success) { alert('Telegram 测试消息发送成功！'); } else { alert('发送失败: ' + data.message); }
+                    } catch (e) { alert('发送请求失败'); } finally { testingTelegram.value = false; }
+                };
+
+                const sendTestWebhook = async () => {
+                    if (!config.value || !config.value.Notification.webhook.url) { alert('请先填写Webhook URL，建议保存后再测试'); return; }
+                    testingWebhook.value = true;
+                    try {
+                        const res = await fetch('index.php?action=send_test_webhook', { method: 'POST', body: JSON.stringify({ webhook: config.value.Notification.webhook }) });
+                        const data = await res.json();
+                        if (data.success) { alert('Webhook 测试消息发送成功！'); } else { alert('发送失败: ' + data.message); }
+                    } catch (e) { alert('发送请求失败'); } finally { testingWebhook.value = false; }
                 };
 
                 const addAccount = () => {
@@ -1219,7 +1437,8 @@
                     regionSearchFocus, aliyunRegions, refreshingMap, systemLogs, cronWarning,
                     showChartModal, chartLoading, chartMode, currentChartAccount, openChart, closeChart, switchChartMode, isChartEmpty,
                     toggleAdmin, performLogin, saveConfig, sendTestEmail, sendingEmail, addAccount, removeAccount, getInstanceStatusColor, performSetup, refreshSingle, fetchLogs,
-                    currentLogTab, clearLogs, logAutoRefresh
+                    currentLogTab, clearLogs, logAutoRefresh,
+                    currentNotifyTab, testingTelegram, testingWebhook, sendTestTelegram, sendTestWebhook
                 };
             }
         }).mount('#app');

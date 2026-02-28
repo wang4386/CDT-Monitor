@@ -116,12 +116,32 @@ class AliyunTrafficCheck
             'keep_alive' => ($settings['keep_alive'] ?? '0') === '1',
             'api_interval' => (int) ($settings['api_interval'] ?? 600),
             'Notification' => [
+                'email_enabled' => ($settings['notify_email_enabled'] ?? '1') === '1',
                 'email' => $settings['notify_email'] ?? '',
                 'host' => $settings['notify_host'] ?? '',
                 'port' => $settings['notify_port'] ?? 465,
                 'username' => $settings['notify_username'] ?? '',
                 'password' => $settings['notify_password'] ?? '',
                 'secure' => $settings['notify_secure'] ?? 'ssl',
+                'telegram' => [
+                    'enabled' => ($settings['notify_tg_enabled'] ?? '0') === '1',
+                    'token' => $settings['notify_tg_token'] ?? '',
+                    'chat_id' => $settings['notify_tg_chat_id'] ?? '',
+                    'proxy_type' => $settings['notify_tg_proxy_type'] ?? 'none',
+                    'proxy_url' => $settings['notify_tg_proxy_url'] ?? '',
+                    'proxy_ip' => $settings['notify_tg_proxy_ip'] ?? '',
+                    'proxy_port' => $settings['notify_tg_proxy_port'] ?? '',
+                    'proxy_user' => $settings['notify_tg_proxy_user'] ?? '',
+                    'proxy_pass' => $settings['notify_tg_proxy_pass'] ?? ''
+                ],
+                'webhook' => [
+                    'enabled' => ($settings['notify_wh_enabled'] ?? '0') === '1',
+                    'url' => $settings['notify_wh_url'] ?? '',
+                    'method' => $settings['notify_wh_method'] ?? 'GET',
+                    'request_type' => $settings['notify_wh_request_type'] ?? 'JSON',
+                    'headers' => $settings['notify_wh_headers'] ?? '',
+                    'body' => $settings['notify_wh_body'] ?? ''
+                ]
             ],
             'Accounts' => []
         ];
@@ -517,6 +537,16 @@ class AliyunTrafficCheck
     public function sendTestEmail($to)
     {
         return $this->notificationService->sendTestEmail($to);
+    }
+
+    public function sendTestTelegram($data)
+    {
+        return $this->notificationService->sendTestTelegram($data);
+    }
+
+    public function sendTestWebhook($data)
+    {
+        return $this->notificationService->sendTestWebhook($data);
     }
 
     private function logMailResult($result, $key)

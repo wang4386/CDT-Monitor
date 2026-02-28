@@ -107,6 +107,20 @@ if ($action === 'send_test_email') {
     exit;
 }
 
+if ($action === 'send_test_telegram') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    $result = $app->sendTestTelegram($data['telegram'] ?? []);
+    echo json_encode(['success' => $result === true, 'message' => $result]);
+    exit;
+}
+
+if ($action === 'send_test_webhook') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    $result = $app->sendTestWebhook($data['webhook'] ?? []);
+    echo json_encode(['success' => $result === true, 'message' => $result]);
+    exit;
+}
+
 if ($action === 'refresh_account') {
     $data = json_decode(file_get_contents('php://input'), true);
     $id = $data['id'] ?? 0;

@@ -88,12 +88,39 @@ class ConfigManager
             $this->saveSetting('api_interval', $data['api_interval'] ?? 600);
 
             if (isset($data['Notification'])) {
-                $this->saveSetting('notify_email', $data['Notification']['email']);
-                $this->saveSetting('notify_host', $data['Notification']['host']);
-                $this->saveSetting('notify_port', $data['Notification']['port']);
-                $this->saveSetting('notify_username', $data['Notification']['username']);
-                $this->saveSetting('notify_password', $data['Notification']['password']);
-                $this->saveSetting('notify_secure', $data['Notification']['secure']);
+                // Email
+                $this->saveSetting('notify_email_enabled', isset($data['Notification']['email_enabled']) && $data['Notification']['email_enabled'] ? '1' : '0');
+                $this->saveSetting('notify_email', $data['Notification']['email'] ?? '');
+                $this->saveSetting('notify_host', $data['Notification']['host'] ?? '');
+                $this->saveSetting('notify_port', $data['Notification']['port'] ?? 465);
+                $this->saveSetting('notify_username', $data['Notification']['username'] ?? '');
+                $this->saveSetting('notify_password', $data['Notification']['password'] ?? '');
+                $this->saveSetting('notify_secure', $data['Notification']['secure'] ?? 'ssl');
+
+                // Telegram
+                if (isset($data['Notification']['telegram'])) {
+                    $tg = $data['Notification']['telegram'];
+                    $this->saveSetting('notify_tg_enabled', isset($tg['enabled']) && $tg['enabled'] ? '1' : '0');
+                    $this->saveSetting('notify_tg_token', $tg['token'] ?? '');
+                    $this->saveSetting('notify_tg_chat_id', $tg['chat_id'] ?? '');
+                    $this->saveSetting('notify_tg_proxy_type', $tg['proxy_type'] ?? 'none');
+                    $this->saveSetting('notify_tg_proxy_url', $tg['proxy_url'] ?? '');
+                    $this->saveSetting('notify_tg_proxy_ip', $tg['proxy_ip'] ?? '');
+                    $this->saveSetting('notify_tg_proxy_port', $tg['proxy_port'] ?? '');
+                    $this->saveSetting('notify_tg_proxy_user', $tg['proxy_user'] ?? '');
+                    $this->saveSetting('notify_tg_proxy_pass', $tg['proxy_pass'] ?? '');
+                }
+
+                // Webhook
+                if (isset($data['Notification']['webhook'])) {
+                    $wh = $data['Notification']['webhook'];
+                    $this->saveSetting('notify_wh_enabled', isset($wh['enabled']) && $wh['enabled'] ? '1' : '0');
+                    $this->saveSetting('notify_wh_url', $wh['url'] ?? '');
+                    $this->saveSetting('notify_wh_method', $wh['method'] ?? 'GET');
+                    $this->saveSetting('notify_wh_request_type', $wh['request_type'] ?? 'JSON');
+                    $this->saveSetting('notify_wh_headers', $wh['headers'] ?? '');
+                    $this->saveSetting('notify_wh_body', $wh['body'] ?? '');
+                }
             }
 
             // 2. 账号增量同步
