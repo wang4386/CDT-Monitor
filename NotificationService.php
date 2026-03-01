@@ -17,22 +17,30 @@ class NotificationService
      */
     public function notifySchedule($actionType, $account, $description = "")
     {
-        if (($this->config['enable_schedule_email'] ?? '0') !== '1') return true; 
-        
+        if (($this->config['enable_schedule_email'] ?? '0') !== '1')
+            return true;
+
         $title = "定时任务: " . $actionType;
         $maskedKey = substr($account['access_key_id'], 0, 7) . '***';
+        $traffic = isset($account['traffic_used']) ? round($account['traffic_used'], 2) : 'N/A';
+        $threshold = $this->config['traffic_threshold'] ?? 95;
+
         $details = [
             ['label' => '账号 ID', 'value' => $maskedKey],
             ['label' => '执行动作', 'value' => $actionType, 'highlight' => true],
             ['label' => '执行时间', 'value' => date('Y-m-d H:i:s')],
+            ['label' => '当前流量', 'value' => $traffic . ' GB'],
+            ['label' => '设定阈值', 'value' => $threshold . '%'],
             ['label' => '详情说明', 'value' => $description ?: '根据预设时间表自动执行。']
         ];
-        
+
         $textMsg = "【CDT Monitor】{$title}\n" .
-                   "账号 ID: {$maskedKey}\n" .
-                   "执行动作: {$actionType}\n" .
-                   "执行时间: " . date('Y-m-d H:i:s') . "\n" .
-                   "详情说明: " . ($description ?: '根据预设时间表自动执行。');
+            "账号 ID: {$maskedKey}\n" .
+            "执行动作: {$actionType}\n" .
+            "当前流量: {$traffic} GB\n" .
+            "设定阈值: {$threshold}%\n" .
+            "执行时间: " . date('Y-m-d H:i:s') . "\n" .
+            "详情说明: " . ($description ?: '根据预设时间表自动执行。');
 
         return $this->dispatchNotifications($title, "您的实例已执行{$actionType}操作", $details, 'info', $textMsg, $account['access_key_id']);
     }
@@ -53,11 +61,11 @@ class NotificationService
         ];
 
         $textMsg = "【CDT Monitor】{$title}\n" .
-                   "账号 ID: " . substr($accessKeyId, 0, 7) . '***' . "\n" .
-                   "当前流量: {$traffic} GB\n" .
-                   "使用率: {$percentage}%\n" .
-                   "设定阈值: {$threshold}%\n" .
-                   "当前状态: {$statusText}";
+            "账号 ID: " . substr($accessKeyId, 0, 7) . '***' . "\n" .
+            "当前流量: {$traffic} GB\n" .
+            "使用率: {$percentage}%\n" .
+            "设定阈值: {$threshold}%\n" .
+            "当前状态: {$statusText}";
 
         return $this->dispatchNotifications($title, "检测到流量异常或达到阈值", $details, 'warning', $textMsg, $accessKeyId);
     }
@@ -78,12 +86,17 @@ class NotificationService
         $textMsg = "【CDT Monitor】测试推送\n这是一条来自 Telegram 的测试消息。\n发送时间: " . date('Y-m-d H:i:s');
         return $this->sendTelegram($textMsg, $data);
     }
-    
+
     public function sendTestWebhook($data)
     {
         $textMsg = "【CDT Monitor】测试推送\n这是一条来自 Webhook 的测试消息。\n发送时间: " . date('Y-m-d H:i:s');
-        $details = [['label' => '当前流量', 'value' => '0 GB']];
-        return $this->sendWebhook($textMsg, "测试推送", $details, 'test_account_id', $data);
+        $summary = "这是一条来自 Webhook 的测试消息。";
+        $threshold = $this->config['traffic_threshold'] ?? 95;
+        $details = [
+            ['label' => '当前流量', 'value' => '0 GB'],
+            ['label' => '设定阈值', 'value' => $threshold . '%']
+        ];
+        return $this->sendWebhook($textMsg, "测试推送", $summary, $details, 'test_account_id', $data);
     }
 
     private function dispatchNotifications($title, $summary, $details, $type, $textMsg, $accountId = '')
@@ -97,27 +110,34 @@ class NotificationService
             $attemptCount++;
             $html = $this->renderEmailTemplate($title, $summary, $details, $type);
             $res = $this->sendMail($this->config['notify_email'], '', "CDT通知 - " . $title, $html);
-            if ($res === true) $successCount++;
-            else $errors[] = "Email: " . $res;
+            if ($res === true)
+                $successCount++;
+            else
+                $errors[] = "Email: " . $res;
         }
 
         // Telegram
         if (($this->config['notify_tg_enabled'] ?? '0') === '1' && !empty($this->config['notify_tg_token']) && !empty($this->config['notify_tg_chat_id'])) {
             $attemptCount++;
             $res = $this->sendTelegram($textMsg);
-            if ($res === true) $successCount++;
-            else $errors[] = "TG: " . $res;
+            if ($res === true)
+                $successCount++;
+            else
+                $errors[] = "TG: " . $res;
         }
 
         // Webhook
         if (($this->config['notify_wh_enabled'] ?? '0') === '1' && !empty($this->config['notify_wh_url'])) {
             $attemptCount++;
-            $res = $this->sendWebhook($textMsg, $title, $details, $accountId);
-            if ($res === true) $successCount++;
-            else $errors[] = "WH: " . $res;
+            $res = $this->sendWebhook($textMsg, $title, $summary, $details, $accountId);
+            if ($res === true)
+                $successCount++;
+            else
+                $errors[] = "WH: " . $res;
         }
 
-        if ($attemptCount == 0) return true; // No notifications enabled
+        if ($attemptCount == 0)
+            return true; // No notifications enabled
 
         if ($successCount == 0 && count($errors) > 0) {
             return implode(" | ", $errors);
@@ -129,9 +149,11 @@ class NotificationService
 
     private function renderEmailTemplate($title, $summary, $details, $type = 'info')
     {
-        $color = '#007AFF'; 
-        if ($type === 'warning') $color = '#FF3B30'; 
-        if ($type === 'success') $color = '#34C759'; 
+        $color = '#007AFF';
+        if ($type === 'warning')
+            $color = '#FF3B30';
+        if ($type === 'success')
+            $color = '#34C759';
 
         $rows = '';
         foreach ($details as $item) {
@@ -172,25 +194,25 @@ class NotificationService
         $mail->IsSMTP();
         $mail->SMTPDebug = 0;
         $mail->SMTPAuth = true;
-        
+
         $secure = $this->config['notify_secure'] ?? 'ssl';
         if (!empty($secure)) {
-            $mail->SMTPSecure = $secure; 
+            $mail->SMTPSecure = $secure;
         } else {
             $mail->SMTPSecure = '';
             $mail->SMTPAutoTLS = false;
         }
-        
+
         $mail->Host = $this->config['notify_host'] ?? '';
         $mail->Port = $this->config['notify_port'] ?? 465;
         $mail->Username = $this->config['notify_username'] ?? '';
         $mail->Password = $this->config['notify_password'] ?? '';
-        
+
         $mail->SetFrom($mail->Username, '阿里云CDT监控');
         $mail->Subject = $subject;
         $mail->MsgHTML($body);
         $mail->AddAddress($to, $name);
-        
+
         // 修改：返回 true 或 错误信息字符串
         if ($mail->Send()) {
             return true;
@@ -204,8 +226,9 @@ class NotificationService
         $token = $overrideConfig['token'] ?? $this->config['notify_tg_token'] ?? '';
         $chatId = $overrideConfig['chat_id'] ?? $this->config['notify_tg_chat_id'] ?? '';
         $proxyType = $overrideConfig['proxy_type'] ?? $this->config['notify_tg_proxy_type'] ?? 'none';
-        
-        if (empty($token) || empty($chatId)) return "Telegram Token 或 Chat ID 为空";
+
+        if (empty($token) || empty($chatId))
+            return "Telegram Token 或 Chat ID 为空";
 
         $url = "https://api.telegram.org/bot{$token}/sendMessage";
         if ($proxyType === 'custom' && !empty($overrideConfig['proxy_url'] ?? $this->config['notify_tg_proxy_url'] ?? '')) {
@@ -244,12 +267,14 @@ class NotificationService
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        if ($error) return "Curl Error: " . $error;
-        if ($httpCode != 200) return "HTTP Error {$httpCode}: " . $result;
+        if ($error)
+            return "Curl Error: " . $error;
+        if ($httpCode != 200)
+            return "HTTP Error {$httpCode}: " . $result;
         return true;
     }
 
-    private function sendWebhook($text, $title, $details, $accountId = '', $overrideConfig = null)
+    private function sendWebhook($text, $title, $summary, $details, $accountId = '', $overrideConfig = null)
     {
         $url = $overrideConfig['url'] ?? $this->config['notify_wh_url'] ?? '';
         $method = strtoupper($overrideConfig['method'] ?? $this->config['notify_wh_method'] ?? 'GET');
@@ -257,18 +282,21 @@ class NotificationService
         $headersStr = $overrideConfig['headers'] ?? $this->config['notify_wh_headers'] ?? '';
         $bodyTemplate = $overrideConfig['body'] ?? $this->config['notify_wh_body'] ?? '';
 
-        if (empty($url)) return "Webhook URL为空";
+        if (empty($url))
+            return "Webhook URL为空";
 
         // Parse variables
         $traffic = 'N/A';
         $maxTraffic = 'N/A';
         foreach ($details as $d) {
-            if ($d['label'] === '当前流量') $traffic = str_replace(' GB', '', $d['value']);
-            if ($d['label'] === '设定阈值') $maxTraffic = str_replace('%', '', $d['value']);
+            if ($d['label'] === '当前流量')
+                $traffic = str_replace(' GB', '', $d['value']);
+            if ($d['label'] === '设定阈值')
+                $maxTraffic = str_replace('%', '', $d['value']);
         }
         $replacePairs = [
             '#TITLE#' => $title,
-            '#MSG#' => $text,
+            '#MSG#' => $summary ?: $text,
             '#ACCOUNT#' => $accountId,
             '#TRAFFIC#' => $traffic,
             '#MAX_TRAFFIC#' => $maxTraffic
@@ -290,10 +318,10 @@ class NotificationService
         if ($method === 'GET') {
             $urlReplacePairs = [];
             foreach ($replacePairs as $k => $v) {
-                $urlReplacePairs[$k] = urlencode((string)$v);
+                $urlReplacePairs[$k] = urlencode((string) $v);
             }
             $finalUrl = strtr($url, $urlReplacePairs);
-            
+
             // If body template exists, replace vars and append it to URL query string if no URL vars were found. 
             // Fallback for simple GET without body:
             if (empty($bodyTemplate) && strpos($finalUrl, '?') === false && strpos($url, '#') === false) {
@@ -310,26 +338,26 @@ class NotificationService
             // POST request
             $urlReplacePairs = [];
             foreach ($replacePairs as $k => $v) {
-                $urlReplacePairs[$k] = urlencode((string)$v);
+                $urlReplacePairs[$k] = urlencode((string) $v);
             }
             curl_setopt($ch, CURLOPT_URL, strtr($url, $urlReplacePairs));
             curl_setopt($ch, CURLOPT_POST, true);
-            
+
             $finalBody = '';
             if (!empty($bodyTemplate)) {
                 $bodyReplacePairs = $replacePairs;
                 if ($requestType === 'JSON') {
                     foreach ($bodyReplacePairs as $k => $v) {
                         // Safe JSON encoding for values injected into string literals
-                        $bodyReplacePairs[$k] = substr(json_encode((string)$v, JSON_UNESCAPED_UNICODE), 1, -1);
+                        $bodyReplacePairs[$k] = substr(json_encode((string) $v, JSON_UNESCAPED_UNICODE), 1, -1);
                     }
                 } else if ($requestType === 'FORM') {
                     foreach ($bodyReplacePairs as $k => $v) {
-                        $bodyReplacePairs[$k] = urlencode((string)$v);
+                        $bodyReplacePairs[$k] = urlencode((string) $v);
                     }
                 }
                 $finalBody = strtr($bodyTemplate, $bodyReplacePairs);
-                
+
                 // Content Type
                 if ($requestType === 'JSON') {
                     $customHeaders[] = 'Content-Type: application/json';
@@ -367,8 +395,10 @@ class NotificationService
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        if ($error) return "Curl Error: " . $error;
-        if ($httpCode >= 400) return "HTTP Error {$httpCode}: " . $result;
+        if ($error)
+            return "Curl Error: " . $error;
+        if ($httpCode >= 400)
+            return "HTTP Error {$httpCode}: " . $result;
         return true;
     }
 }
