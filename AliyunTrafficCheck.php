@@ -394,8 +394,8 @@ class AliyunTrafficCheck
             }
 
             // 4. 保活逻辑 (跳过已被定时任务操作的实例)
-            if ($keepAlive && $account['schedule_enabled'] == 1 && !$isOverThreshold && !$statusTransformed) {
-                if ($this->isTimeInRange($currentUserTime, $account['start_time'], $account['stop_time'])) {
+            if ($keepAlive && !$isOverThreshold && !$statusTransformed) {
+                if ($account['schedule_enabled'] == 0 || $this->isTimeInRange($currentUserTime, $account['start_time'], $account['stop_time'])) {
                     if ($status === 'Stopped') {
                         if ($this->safeControlInstance($account, 'start')) {
                             $actions[] = "保活启动";
