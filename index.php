@@ -4,6 +4,9 @@ session_start();
 error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING & ~E_DEPRECATED);
 ini_set('display_errors', 0);
 
+// 设置默认时区为中国时区
+date_default_timezone_set('Asia/Shanghai');
+
 require_once 'AliyunTrafficCheck.php';
 
 header("Cache-Control: no-store, no-cache, must-revalidate, max-age=0");
@@ -31,7 +34,7 @@ if ($action === 'setup') {
         echo json_encode(['success' => false, 'message' => 'System already initialized']);
         exit;
     }
-    
+
     $data = json_decode(file_get_contents('php://input'), true);
     try {
         if ($app->setup($data)) {
@@ -82,6 +85,31 @@ if ($action === 'get_status') {
 if ($action !== 'view' && !isset($_SESSION['is_admin'])) {
     http_response_code(403);
     echo json_encode(['error' => 'Unauthorized']);
+    exit;
+}
+
+// 新增：处理手工控制实例开关机请求
+if ($action === 'control_instance') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    $id = $data['id'] ?? 0;
+    $actionType = $data['action'] ?? ''; // 期望值: Start 或 Stop
+
+    if (!$id || !$actionType) {
+        echo json_encode(['success' => false, 'message' => '参数缺失']);
+        exit;
+    }
+
+    try {
+        $result = $app->controlInstance($id, $actionType);
+
+        if ($result === true) {
+            echo json_encode(['success' => true, 'message' => '指令发送成功']);
+        } else {
+            echo json_encode(['success' => false, 'message' => $result]);
+        }
+    } catch (Exception $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    }
     exit;
 }
 

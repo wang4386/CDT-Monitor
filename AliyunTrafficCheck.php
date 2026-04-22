@@ -29,7 +29,6 @@ class AliyunTrafficCheck
 
             // 注入配置到通知服务
             $this->notificationService->setConfig($this->configManager->getAllSettings());
-
         } catch (Exception $e) {
             $this->initError = $e->getMessage();
         }
@@ -584,6 +583,69 @@ class AliyunTrafficCheck
         }
 
         return true;
+    }
+
+    /**
+     * 公共接口：控制实例开关机
+     * @param int $id 账户ID
+     * @param string $action 'Start' 或 'Stop'
+     */
+    public function controlInstance($id, $action)
+    {
+        // 1. 强制设置 JSON 响应头
+        header('Content-Type: application/json');
+
+        if ($this->initError) {
+            echo json_encode(['success' => false, 'message' => "系统未初始化"]);
+            exit;
+        }
+
+        // 2. 获取账户配置
+        $account = $this->configManager->getAccountById($id);
+        if (!$account) {
+            echo json_encode(['success' => false, 'message' => "账户配置未找到"]);
+            exit;
+        }
+
+        // 3. 获取当前实例状态 (从数据库读取最新状态，确保实时性)
+        $currentStatus = $account['instance_status'] ?? 'Unknown';
+
+        // --- 拦截逻辑 1: 状态冲突拦截 (Pending/Starting/Stopping) ---
+        // 防止在状态变更中重复发送指令
+        $transientStates = ['Pending', 'Starting', 'Stopping'];
+        if (in_array($currentStatus, $transientStates)) {
+            echo json_encode([
+                'success' => false,
+                'message' => "实例状态更新中 ({$currentStatus})，请稍后刷新页面查看最新状态，不要重复操作。"
+            ]);
+            exit;
+        }
+
+        // --- 拦截逻辑 2: 保活模式拦截 ---
+        // 如果开启了“实例保活”，且用户尝试关机，则拒绝操作
+        $keepAlive = $this->configManager->get('keep_alive', '0') === '1';
+        if ($keepAlive && strtolower($action) === 'stop') {
+            $this->db->addLog('warning', "拒绝手动关机请求 [{$account['access_key_id']}]: 实例保活功能已开启");
+            echo json_encode([
+                'success' => false,
+                'message' => "操作被拒绝：当前开启了“实例保活”模式，不允许手动关机。"
+            ]);
+            exit;
+        }
+
+        // 4. 获取关机模式配置 (仅 Stop 时有效)
+        $shutdownMode = $this->configManager->get('shutdown_mode', 'KeepCharging');
+
+        // 5. 调用内部安全方法执行操作
+        $result = $this->safeControlInstance($account, strtolower($action), $shutdownMode);
+
+        if ($result === true) {
+            $this->db->addLog('info', "手动控制实例 [{$account['access_key_id']}] 执行: {$action}");
+            echo json_encode(['success' => true, 'message' => '指令发送成功']);
+        } else {
+            echo json_encode(['success' => false, 'message' => "操作执行失败: " . $result]);
+        }
+        exit;
     }
 
     public function sendTestEmail($to)

@@ -200,15 +200,17 @@
                         <span class="text-sm font-medium text-gray-500">账号</span>
                         <span class="text-sm font-medium text-[#1C1C1E] font-mono">{{ item.account }}</span>
                     </div>
-                    <div v-if="item.cost && item.cost.enabled" class="flex justify-between items-center">
+                    <div v-if="isAdmin && item.cost && item.cost.enabled" class="flex justify-between items-center">
                         <span class="text-sm font-medium text-gray-500">本月费用</span>
                         <span v-if="!item.cost.error" class="text-xs font-medium">
-                            <span v-if="item.cost.monthly_cost !== null" class="font-bold text-orange-500">{{ item.cost.currency === 'USD' ? '$' : '¥' }}{{
+                            <span v-if="item.cost.monthly_cost !== null" class="font-bold text-orange-500">{{
+                                item.cost.currency === 'USD' ? '$' : '¥' }}{{
                                 item.cost.monthly_cost }}</span>
                             <span v-if="item.cost.monthly_cost !== null && item.cost.balance !== null"
                                 class="text-gray-300 mx-1">|</span>
                             <span v-if="item.cost.balance !== null" class="text-gray-400">余<span class="font-bold"
-                                    :class="parseFloat(item.cost.balance) < 100 ? 'text-red-500' : 'text-green-600'">{{ item.cost.currency === 'USD' ? '$' : '¥' }}{{
+                                    :class="parseFloat(item.cost.balance) < 100 ? 'text-red-500' : 'text-green-600'">{{
+                                    item.cost.currency === 'USD' ? '$' : '¥' }}{{
                                     item.cost.balance }}</span></span>
                         </span>
                         <span v-else class="text-[10px] text-gray-400">{{ item.cost.error }}</span>
@@ -221,11 +223,56 @@
                         <span class="text-xs font-medium text-gray-400">当前阈值</span>
                         <span class="text-xs font-medium text-gray-400">{{ item.threshold }}%</span>
                     </div>
+
+                    <!-- 新增：手工控制区域 (仅登录用户可见，且仅在 运行中/已停止 状态下显示) -->
+                    <!-- 注意：这里增加了 item.instanceStatus 的判断，操作后状态变为 Pending 时会自动隐藏 -->
+                    <div v-if="isAdmin && (item.instanceStatus === 'Running' || item.instanceStatus === 'Stopped')"
+                        class="flex justify-between items-center pt-2">
+                        <span class="text-xs font-medium text-gray-400">手动控制</span>
+
+                        <!-- 状态：运行中 -> 显示关机按钮 -->
+                        <button v-if="item.instanceStatus === 'Running'" @click="toggleInstance(item.id, 'Stop', index)"
+                            :disabled="item.isOperating"
+                            class="tap-effect px-3 py-1 text-xs font-bold text-red-500 bg-red-50 border border-red-100 rounded-lg hover:bg-red-100 hover:border-red-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1">
+                            <svg v-if="!item.isOperating" xmlns="http://www.w3.org/2000/svg" fill="none"
+                                viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M5.636 5.636a9 9 0 1012.728 0M12 3v9" />
+                            </svg>
+                            <svg v-else class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none"
+                                viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                    stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                </path>
+                            </svg>
+                            关机
+                        </button>
+
+                        <!-- 状态：已停止 -> 显示开机按钮 -->
+                        <button v-else @click="toggleInstance(item.id, 'Start', index)" :disabled="item.isOperating"
+                            class="tap-effect px-3 py-1 text-xs font-bold text-green-600 bg-green-50 border border-green-100 rounded-lg hover:bg-green-100 hover:border-green-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1">
+                            <svg v-if="!item.isOperating" xmlns="http://www.w3.org/2000/svg" fill="none"
+                                viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3.5 h-3.5">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
+                            </svg>
+                            <svg v-else class="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none"
+                                viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                    stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                </path>
+                            </svg>
+                            开机
+                        </button>
+                    </div>
                 </div>
-            </div>
-            <div v-if="statusData.length === 0" class="col-span-full py-20 text-center text-gray-400">
-                <p>暂无监控账号，请点击右上角登录管理员添加。</p>
-            </div>
+                <div v-if="statusData.length === 0" class="col-span-full py-20 text-center text-gray-400">
+                    <p>暂无监控账号，请点击右上角登录管理员添加。</p>
+                </div>
         </main>
 
         <div v-if="initialized && loading && !criticalError" class="w-full h-64 flex items-center justify-center">
@@ -804,7 +851,8 @@
                                 <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div class="space-y-1">
                                         <label class="text-xs font-medium text-gray-500 ml-2">站点类型</label>
-                                        <select v-model="acc.siteType" class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none cursor-pointer">
+                                        <select v-model="acc.siteType"
+                                            class="w-full glass-input rounded-xl px-4 py-2 text-sm appearance-none cursor-pointer">
                                             <option value="china">中国站 (CNY ¥)</option>
                                             <option value="international">国际站 (USD $)</option>
                                         </select>
@@ -989,6 +1037,7 @@
                 const loadingCheckInit = ref(true);
                 const regionSearchFocus = ref(-1);
                 const refreshingMap = ref({});
+                const isOperatingMap = ref({}); // 用于追踪每个实例的操作状态（防止重复点击）
 
                 // 日志相关
                 const systemLogs = ref([]);
@@ -1163,6 +1212,55 @@
                         console.error(e);
                     } finally {
                         refreshingMap.value[index] = false;
+                    }
+                };
+
+                const toggleInstance = async (id, action, index) => {
+                    const actionText = action === 'Start' ? '开机' : '关机';
+
+                    if (!confirm(`确定要${actionText}该实例吗？`)) {
+                        isOperatingMap.value[index] = false;
+                        return;
+                    }
+
+                    // 1. 设置锁定状态
+                    isOperatingMap.value[index] = true;
+
+                    try {
+                        const res = await fetch('index.php?action=control_instance', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                id: id,
+                                action: action
+                            })
+                        });
+
+                        const data = await res.json();
+
+                        if (data.success) {
+                            // 2. 成功：将状态设为 'Pending'
+                            // 注意：HTML 中 v-if 判断了只有 Running 或 Stopped 才显示按钮
+                            // 所以当状态变为 Pending 时，按钮会自动消失
+                            const targetItem = statusData.value.find(item => item.id === id);
+                            if (targetItem) {
+                                targetItem.instanceStatus = 'Pending';
+                            }
+
+                            // 3. 提示用户操作完成，按钮已消失
+                            alert('操作完成，请刷新页面查看最新状态');
+                        } else {
+                            // 失败：弹出错误信息
+                            alert(data.message || '操作失败，请检查日志');
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        alert('网络请求失败，请检查连接');
+                    } finally {
+                        // 4. 释放按钮锁定（虽然按钮已经消失了，但逻辑上要释放）
+                        isOperatingMap.value[index] = false;
                     }
                 };
 
@@ -1500,7 +1598,8 @@
                     statusData, loading, isAdmin, checkingLogin, showLoginModal, passwordInput, config, initialized, loadingCheckInit, setupData, criticalError,
                     regionSearchFocus, aliyunRegions, refreshingMap, systemLogs, cronWarning,
                     showChartModal, chartLoading, chartMode, currentChartAccount, openChart, closeChart, switchChartMode, isChartEmpty,
-
+                    isOperatingMap,
+                    toggleInstance,
                     toggleAdmin, performLogin, saveConfig, sendTestEmail, sendingEmail, addAccount, removeAccount, getInstanceStatusColor, performSetup, refreshSingle, fetchLogs,
                     currentLogTab, clearLogs, logAutoRefresh,
                     currentNotifyTab, testingTelegram, testingWebhook, sendTestTelegram, sendTestWebhook
