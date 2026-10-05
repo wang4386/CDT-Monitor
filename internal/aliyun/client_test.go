@@ -77,3 +77,61 @@ func TestGetAccountBalanceAcceptsAliyunBusinessCode200(t *testing.T) {
 		t.Fatalf("balance=%#v err=%v", balance, err)
 	}
 }
+
+func TestGetTrafficRetriesEmptyTrafficDetails(t *testing.T) {
+	calls := 0
+	client := NewClient()
+	client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		calls++
+		body := `{"TrafficDetails":[]}`
+		if calls == 2 {
+			body = `{"TrafficDetails":[{"BusinessRegionId":"cn-hongkong","Traffic":1073741824}]}`
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Header:     make(http.Header),
+			Request:    request,
+		}, nil
+	})
+
+	traffic, err := client.GetTraffic(context.Background(), domain.Account{AccessKeyID: "LTAItest", RegionID: "cn-hongkong"}, "secret")
+	if err != nil || traffic != 1 || calls != 2 {
+		t.Fatalf("traffic=%v err=%v calls=%d", traffic, err, calls)
+	}
+}
+
+func TestGetInstanceStatusRetriesTransientTimestampErrors(t *testing.T) {
+	for _, message := range []string{
+		`{"Code":"InvalidTimeStamp.Expired","Message":"Specified time stamp or date value is expired."}`,
+		`{"Code":"MissingParameter","Message":"The input parameter Timestamp is not supplied."}`,
+	} {
+		t.Run(message, func(t *testing.T) {
+			calls := 0
+			client := NewClient()
+			client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				calls++
+				if err := request.ParseForm(); err != nil || request.PostForm.Get("Timestamp") == "" {
+					t.Fatalf("Timestamp missing from request: %v", err)
+				}
+				body := message
+				status := http.StatusBadRequest
+				if calls == 2 {
+					body = `{"InstanceStatuses":{"InstanceStatus":[{"Status":"Running"}]}}`
+					status = http.StatusOK
+				}
+				return &http.Response{
+					StatusCode: status,
+					Body:       io.NopCloser(strings.NewReader(body)),
+					Header:     make(http.Header),
+					Request:    request,
+				}, nil
+			})
+
+			status, err := client.GetInstanceStatus(context.Background(), domain.Account{AccessKeyID: "LTAItest", RegionID: "cn-shanghai"}, "secret")
+			if err != nil || status != "Running" || calls != 2 {
+				t.Fatalf("status=%q err=%v calls=%d", status, err, calls)
+			}
+		})
+	}
+}

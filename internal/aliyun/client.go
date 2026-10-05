@@ -249,10 +249,15 @@ func (c *Client) callOnce(ctx context.Context, accessKeyID, secret, region, host
 		return nil, resp.StatusCode >= 500, fmt.Errorf("aliyun %s invalid response: %w", action, err)
 	}
 	if resp.StatusCode >= 400 {
-		return nil, resp.StatusCode >= 500 || resp.StatusCode == 429, fmt.Errorf("aliyun %s http %d: %s", action, resp.StatusCode, compactMessage(result, body))
+		message := compactMessage(result, body)
+		return nil, resp.StatusCode >= 500 || resp.StatusCode == 429 || isRetryableTimestampError(stringValue(result["Code"]), message), fmt.Errorf("aliyun %s http %d: %s", action, resp.StatusCode, message)
 	}
 	if code := stringValue(result["Code"]); code != "" && !isSuccessCode(code) {
-		return nil, strings.Contains(strings.ToLower(code), "throttl"), fmt.Errorf("aliyun %s %s: %s", action, code, stringValue(result["Message"]))
+		message := stringValue(result["Message"])
+		return nil, strings.Contains(strings.ToLower(code), "throttl") || isRetryableTimestampError(code, message), fmt.Errorf("aliyun %s %s: %s", action, code, message)
+	}
+	if action == "ListCdtInternetTraffic" && !hasTrafficDetails(result) {
+		return nil, true, errors.New("CDT response has no TrafficDetails")
 	}
 	return result, false, nil
 }
@@ -271,6 +276,12 @@ func compactMessage(result map[string]any, raw []byte) string {
 		return message
 	}
 	return string(raw)
+}
+
+func isRetryableTimestampError(code, message string) bool {
+	text := strings.ToLower(strings.ReplaceAll(code+" "+message, " ", ""))
+	return strings.Contains(text, "timestamp") &&
+		(strings.Contains(text, "expired") || strings.Contains(text, "notsupplied") || strings.Contains(text, "missing"))
 }
 
 func sign(values map[string]string, secret string) string {
@@ -333,6 +344,14 @@ func trafficFromResponse(result map[string]any, class string) (float64, error) {
 		}
 	}
 	return total / (1024 * 1024 * 1024), nil
+}
+
+func hasTrafficDetails(result map[string]any) bool {
+	if len(asSlice(result["TrafficDetails"])) > 0 {
+		return true
+	}
+	data, ok := result["Data"].(map[string]any)
+	return ok && len(asSlice(data["TrafficDetails"])) > 0
 }
 
 func nestedSlice(value map[string]any, parents ...string) []any {
