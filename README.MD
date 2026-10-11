@@ -21,6 +21,11 @@ CDT Monitor 是一个用于阿里云 CDT 流量监控、ECS 实例自动化控�
 - 带 scope、可撤销的 API Key，供 Android、iOS 和桌面小组件使用。
 - 自动清理日志/统计，健康检查和 JSON 容器日志。
 - 原 PHP SQLite 数据库可原地升级；启动前请先备份 `data/data.sqlite`。
+- 日报推送，精准掌握每台实例流量消耗情况
+## 截图
+| ![https://assets.qninq.cn/qning/Mj50xXuE.webp](https://assets.qninq.cn/qning/Mj50xXuE.webp) | ![https://assets.qninq.cn/qning/049BVuDm.webp](https://assets.qninq.cn/qning/049BVuDm.webp) | ![https://assets.qninq.cn/qning/vPQwvG0F.webp](https://assets.qninq.cn/qning/vPQwvG0F.webp) |
+|---|---|---|
+| ![https://assets.qninq.cn/qning/RPDnZGFl.webp](https://assets.qninq.cn/qning/RPDnZGFl.webp) | ![https://assets.qninq.cn/qning/kWxAPeC8.webp](https://assets.qninq.cn/qning/kWxAPeC8.webp) | ![https://assets.qninq.cn/qning/H6o7uCzG.webp](https://assets.qninq.cn/qning/H6o7uCzG.webp) |
 
 ## 架构
 

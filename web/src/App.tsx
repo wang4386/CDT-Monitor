@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { APIError, api, fetchLatestReleaseFromGitHub, waitForJob } from './api'
 import TimePicker from './TimePicker'
+import { ThemeMenu } from './Appearance'
 import {
   APIKeyRecord, Account, AccountSummary, Config, History, Job, LogEntry, PasskeyRecord,
   StatusResponse, SystemInfo, defaultConfig, emptyAccount,
@@ -189,7 +190,7 @@ function SetupWizard({ onComplete, notify }: { onComplete: () => Promise<void>; 
 
   return (
     <main className="setup-shell">
-      <header className="setup-header"><div className="brand-lockup"><BrandMark /><div><b>CDT MONITOR</b><span>SECURE SETUP</span></div></div><StepDots current={step} /></header>
+      <header className="setup-header"><div className="brand-lockup"><BrandMark /><div><b>CDT MONITOR</b><span>SECURE SETUP</span></div></div><div className="setup-header-actions"><StepDots current={step} /><ThemeMenu /></div></header>
       <section className="glass-card setup-card">
         <div className="setup-copy">
           <p className="eyebrow">STEP {step + 1} OF 3</p>
@@ -256,6 +257,7 @@ function Login({ onComplete }: { onComplete: () => Promise<void> }) {
   }
   return (
     <main className="login-shell">
+      <div className="auth-appearance"><ThemeMenu /></div>
       <div className="login-card-stack">
         <div className="login-brand"><div className="brand-lockup"><BrandMark /><div><b>CDT MONITOR</b><span>CONTROL PLANE</span></div></div><p>阿里云 CDT 流量与实例自动化控制台</p></div>
         <form className="glass-card auth-card" onSubmit={submit}>
@@ -368,6 +370,7 @@ function Dashboard({ status, config, onRefresh, onSettings, onAdmin, onHistory, 
         <div id="dashboard-actions" className={`topbar-actions ${mobileMenu ? 'open' : ''}`} aria-busy={refreshingAll}>
           <div className={`heartbeat ${heartbeatAge > 180 ? 'heartbeat--warn' : ''}`}><i />{heartbeatAge > 180 ? '监控任务延迟' : '自动化运行中'}</div>
           <IconButton label={refreshingAll ? '正在强制刷新全部实例' : '强制刷新全部实例'} disabled={refreshingAll} onClick={() => void refreshAll()}>{refreshingAll ? <LoaderCircle className="spin" size={18} /> : <RefreshCw size={18} />}</IconButton>
+          <ThemeMenu />
           <IconButton label="设置" onClick={openSettings}><Settings size={18} /></IconButton>
           <IconButton label="管理员" title="管理员设置" onClick={openAdmin}><UserCog size={18} /></IconButton>
           <IconButton label="退出" onClick={leave}><LogOut size={18} /></IconButton>

@@ -57,16 +57,17 @@ export default function HistoryChart({ data, range }: { data: ChartPoint[]; rang
   const formatLabel = range === 'hourly' ? hourLabel : dayLabel
   const tooltip = {
     contentStyle: {
-      background: 'rgba(255, 255, 255, .96)',
-      border: '1px solid rgba(173, 178, 184, .45)',
+      background: 'var(--chart-tooltip-bg)',
+      border: '1px solid var(--line-strong)',
       borderRadius: 10,
-      boxShadow: '0 16px 32px -20px rgba(15, 23, 42, .36)',
+      boxShadow: 'var(--shadow-popover)',
       fontSize: 12,
+      color: 'var(--ink)',
     },
     formatter: (value: number | string) => [typeof value === 'number' ? value.toFixed(3) : value, '流量 (GB)'] as [string | number, string],
     labelFormatter: (value: number) => formatLabel(value),
   }
-  const axis = { tickLine: false, axisLine: false, tick: { fill: '#737780', fontSize: isCompact ? 10 : 11 } }
+  const axis = { tickLine: false, axisLine: false, tick: { fill: 'var(--chart-axis)', fontSize: isCompact ? 10 : 11 } }
   const margin = isCompact
     ? { top: 10, right: 10, bottom: 2, left: 2 }
     : { top: 10, right: 18, bottom: 2, left: -8 }
@@ -75,7 +76,7 @@ export default function HistoryChart({ data, range }: { data: ChartPoint[]; rang
     <ResponsiveContainer width="100%" height="100%" debounce={80} onResize={(width) => setChartWidth(width)}>
       {range === 'hourly' ? (
         <LineChart data={timeline} margin={margin}>
-          <CartesianGrid stroke="rgba(173, 178, 184, .32)" vertical={false} />
+          <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
           <XAxis
             dataKey="at"
             type="number"
@@ -96,15 +97,15 @@ export default function HistoryChart({ data, range }: { data: ChartPoint[]; rang
             dataKey="traffic"
             connectNulls={false}
             isAnimationActive={false}
-            stroke="#111315"
+            stroke="var(--chart-line)"
             strokeWidth={2.25}
-            dot={sampleCount <= 4 ? { r: 3, fill: '#111315', stroke: '#fff', strokeWidth: 2 } : false}
-            activeDot={{ r: 4, fill: '#111315', stroke: '#fff', strokeWidth: 2 }}
+            dot={sampleCount <= 4 ? { r: 3, fill: 'var(--chart-line)', stroke: 'var(--modal)', strokeWidth: 2 } : false}
+            activeDot={{ r: 4, fill: 'var(--chart-line)', stroke: 'var(--modal)', strokeWidth: 2 }}
           />
         </LineChart>
       ) : (
         <BarChart data={timeline} margin={margin}>
-          <CartesianGrid stroke="rgba(173, 178, 184, .32)" vertical={false} />
+          <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
           <XAxis
             dataKey="at"
             type="number"
@@ -120,7 +121,7 @@ export default function HistoryChart({ data, range }: { data: ChartPoint[]; rang
           />
           <YAxis width={isCompact ? 40 : 48} tickFormatter={(value: number) => Number(value.toFixed(3)).toString()} {...axis} />
           <Tooltip {...tooltip} />
-          <Bar dataKey="traffic" fill="#111315" barSize={isCompact ? 12 : 20} maxBarSize={isCompact ? 16 : 26} isAnimationActive={false} radius={[4, 4, 0, 0]} />
+          <Bar dataKey="traffic" fill="var(--chart-line)" barSize={isCompact ? 12 : 20} maxBarSize={isCompact ? 16 : 26} isAnimationActive={false} radius={[4, 4, 0, 0]} />
         </BarChart>
       )}
     </ResponsiveContainer>
