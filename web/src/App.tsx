@@ -1134,7 +1134,7 @@ function ElegantSelect({ id, value, options, onChange, searchable, searchPlaceho
     const availableAbove = Math.max(0, rect.top - visibleTop - 12)
     const visibleLeft = viewport?.offsetLeft ?? 0
     const visibleRight = Math.min(window.innerWidth, visibleLeft + (viewport?.width ?? window.innerWidth))
-    const menuWidth = isMobile ? Math.min(Math.max(rect.width, 220), visibleRight - visibleLeft - 24) : rect.width
+    const menuWidth = isMobile ? Math.min(Math.max(rect.width, 160), visibleRight - visibleLeft - 24) : rect.width
     const maxMenuHeight = isMobile ? 420 : 320
     const estimatedHeight = Math.min(maxMenuHeight, filteredOptions.length * 52 + 16)
     const placement = availableBelow >= estimatedHeight || availableBelow >= availableAbove ? 'down' : 'up'

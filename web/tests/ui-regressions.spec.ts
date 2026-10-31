@@ -250,7 +250,8 @@ test('IP card centers by viewport and both schedule editors expose advanced Cron
 			})
 			return { width: rect.width, top: rect.top, bottom: rect.bottom, footerTop, labelsFit, optionsFit, scrollable: menu.scrollHeight > menu.clientHeight + 1 }
 		})
-		expect(bounds.width).toBeGreaterThanOrEqual(200)
+		expect(bounds.width).toBeGreaterThanOrEqual(160)
+		expect(bounds.width).toBeLessThanOrEqual(180)
 		expect(bounds.top).toBeGreaterThanOrEqual(0)
 		expect(bounds.bottom).toBeLessThanOrEqual(bounds.footerTop)
 		expect(bounds.labelsFit).toBe(true)
