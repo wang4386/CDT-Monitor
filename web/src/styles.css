@@ -781,6 +781,9 @@ h3 { letter-spacing: 0; }
 .cron-preview-button { grid-column: auto; grid-row: auto; }
 
 @media (max-width: 640px) {
+  .select-popover { border-radius: 12px; }
+  .select-option { min-height: 48px; }
+  .select-option__label { overflow: visible; overflow-wrap: anywhere; text-overflow: clip; white-space: normal; }
   .cron-editor__row,
   .instance-settings-modal .cron-editor__row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .cron-editor__row .time-picker__trigger { min-height: 40px; padding: 0 6px; gap: 4px; }

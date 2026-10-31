@@ -1119,29 +1119,48 @@ function ElegantSelect({ id, value, options, onChange, searchable, searchPlaceho
   const activeOptionId = open && filteredOptions[activeIndex] ? `${listId}-option-${activeIndex}` : undefined
 
   const updatePosition = useCallback(() => {
-    const rect = rootRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const availableBelow = window.innerHeight - rect.bottom - 12
-    const availableAbove = rect.top - 12
-    const placement = availableBelow >= 220 || availableBelow >= availableAbove ? 'down' : 'up'
+    const root = rootRef.current
+    if (!root) return
+    const rect = root.getBoundingClientRect()
+    const isMobile = window.matchMedia('(max-width: 640px)').matches
+    const viewport = window.visualViewport
+    const visibleTop = viewport?.offsetTop ?? 0
+    const visibleBottom = Math.min(window.innerHeight, visibleTop + (viewport?.height ?? window.innerHeight))
+    const modal = root.closest('.modal-layer')
+    const footer = modal?.querySelector<HTMLElement>('.settings-footer, .instance-settings-modal > footer')
+    const footerTop = footer?.getBoundingClientRect().top ?? visibleBottom
+    const menuBottom = Math.min(visibleBottom - 12, footerTop - (isMobile ? 8 : 0))
+    const availableBelow = Math.max(0, menuBottom - rect.bottom - 8)
+    const availableAbove = Math.max(0, rect.top - visibleTop - 12)
+    const visibleLeft = viewport?.offsetLeft ?? 0
+    const visibleRight = Math.min(window.innerWidth, visibleLeft + (viewport?.width ?? window.innerWidth))
+    const menuWidth = isMobile ? Math.min(Math.max(rect.width, 220), visibleRight - visibleLeft - 24) : rect.width
+    const maxMenuHeight = isMobile ? 420 : 320
+    const estimatedHeight = Math.min(maxMenuHeight, filteredOptions.length * 52 + 16)
+    const placement = availableBelow >= estimatedHeight || availableBelow >= availableAbove ? 'down' : 'up'
     const available = placement === 'down' ? availableBelow : availableAbove
+    const left = Math.min(Math.max(visibleLeft + 12, rect.left), Math.max(visibleLeft + 12, visibleRight - menuWidth - 12))
     setPosition({
-      left: Math.min(Math.max(12, rect.left), Math.max(12, window.innerWidth - rect.width - 12)),
+      left,
       top: placement === 'down' ? rect.bottom + 8 : rect.top - 8,
-      width: rect.width,
-      maxHeight: Math.max(120, Math.min(320, available - 8)),
+      width: menuWidth,
+      maxHeight: Math.max(1, Math.min(maxMenuHeight, available - 8)),
       placement,
     })
-  }, [])
+  }, [filteredOptions.length])
 
   useLayoutEffect(() => {
     if (!open) return
     updatePosition()
     window.addEventListener('resize', updatePosition)
     window.addEventListener('scroll', updatePosition, true)
+    window.visualViewport?.addEventListener('resize', updatePosition)
+    window.visualViewport?.addEventListener('scroll', updatePosition)
     return () => {
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
+      window.visualViewport?.removeEventListener('resize', updatePosition)
+      window.visualViewport?.removeEventListener('scroll', updatePosition)
     }
   }, [open, updatePosition])
 

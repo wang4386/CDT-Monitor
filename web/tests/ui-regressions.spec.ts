@@ -234,6 +234,37 @@ test('IP card centers by viewport and both schedule editors expose advanced Cron
 	await page.getByRole('button', { name: '实例设置' }).click()
 	await page.getByRole('group', { name: '定时任务模式' }).getByRole('button', { name: '进阶' }).click()
 	await expect(page.locator('.cron-editor')).toHaveCount(2)
+	const mobileCron = page.locator('.cron-editor').first()
+	const modeSelect = mobileCron.locator('.cron-select:not(.cron-select--day) [role="combobox"]')
+	const assertMobileSelectFits = async () => {
+		const popover = page.locator('.select-popover')
+		await expect(popover).toBeVisible()
+		const bounds = await popover.evaluate((menu) => {
+			const rect = menu.getBoundingClientRect()
+			const footer = document.querySelector<HTMLElement>('.instance-settings-modal > footer')
+			const footerTop = footer?.getBoundingClientRect().top ?? window.innerHeight
+			const labelsFit = Array.from(menu.querySelectorAll<HTMLElement>('.select-option__label')).every((label) => label.scrollWidth <= label.clientWidth + 1)
+			const optionsFit = Array.from(menu.querySelectorAll<HTMLElement>('[role="option"]')).every((option) => {
+				const optionRect = option.getBoundingClientRect()
+				return optionRect.top >= rect.top - 1 && optionRect.bottom <= rect.bottom + 1
+			})
+			return { width: rect.width, top: rect.top, bottom: rect.bottom, footerTop, labelsFit, optionsFit, scrollable: menu.scrollHeight > menu.clientHeight + 1 }
+		})
+		expect(bounds.width).toBeGreaterThanOrEqual(200)
+		expect(bounds.top).toBeGreaterThanOrEqual(0)
+		expect(bounds.bottom).toBeLessThanOrEqual(bounds.footerTop)
+		expect(bounds.labelsFit).toBe(true)
+		expect(bounds.optionsFit).toBe(true)
+		expect(bounds.scrollable).toBe(false)
+	}
+	await modeSelect.click()
+	await assertMobileSelectFits()
+	await page.getByRole('option', { name: '每周', exact: true }).click()
+	await mobileCron.locator('.cron-select--day [role="combobox"]').click()
+	await assertMobileSelectFits()
+	await expect(page.getByRole('option', { name: '周日', exact: true })).toBeVisible()
+		await page.screenshot({ path: testInfo.outputPath('cron-advanced-instance-mobile-menu.png') })
+	await page.keyboard.press('Escape')
 		await page.screenshot({ path: testInfo.outputPath('cron-advanced-instance-mobile.png') })
 })
 
