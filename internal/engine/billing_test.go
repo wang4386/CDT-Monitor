@@ -14,12 +14,28 @@ import (
 
 type billingTestProvider struct{}
 
+func TestUsesSimpleScheduleByMode(t *testing.T) {
+	if !usesSimpleSchedule(domain.Account{ScheduleEnabled: true, ScheduleMode: "simple", StartCron: "0 8 * * *"}) {
+		t.Fatal("simple mode must use daily times and ignore retained Cron expressions")
+	}
+	if usesSimpleSchedule(domain.Account{ScheduleEnabled: true, ScheduleMode: "advanced", StartTime: "08:00"}) {
+		t.Fatal("advanced mode must use its own report time")
+	}
+	if usesSimpleSchedule(domain.Account{ScheduleEnabled: true, StartCron: "0 8 * * *"}) {
+		t.Fatal("legacy accounts with Cron expressions must retain advanced behavior")
+	}
+}
+
 func (billingTestProvider) GetTraffic(context.Context, domain.Account, string) (float64, error) {
 	return 1.25, nil
 }
 
 func (billingTestProvider) GetInstanceStatus(context.Context, domain.Account, string) (string, error) {
 	return domain.StatusRunning, nil
+}
+
+func (billingTestProvider) GetInstanceDetails(context.Context, domain.Account, string) (aliyun.InstanceDetails, error) {
+	return aliyun.InstanceDetails{Status: domain.StatusRunning, PublicIP: "203.0.113.10"}, nil
 }
 
 func (billingTestProvider) ControlInstance(context.Context, domain.Account, string, string, string) error {

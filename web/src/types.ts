@@ -5,8 +5,11 @@ export type Account = {
   secret_configured: boolean
   region_id: string
   instance_id: string
+  public_ip?: string
+  public_ipv6?: string
   max_traffic: number
   schedule_enabled: boolean
+  schedule_mode?: 'simple' | 'advanced'
   start_time: string
   stop_time: string
   remark: string
@@ -15,6 +18,8 @@ export type Account = {
   shutdown_mode?: '' | 'KeepCharging' | 'StopCharging'
   daily_report?: boolean | null
   daily_report_time?: string
+  start_cron?: string
+  stop_cron?: string
 }
 
 export type Config = {
@@ -49,6 +54,9 @@ export type AccountSummary = {
   threshold: number
   over_threshold: boolean
   instance_status: string
+  public_ip?: string
+  public_ipv6?: string
+  ip_updated_at?: string
   last_updated: string
   stale: boolean
   monthly_cost?: number
@@ -58,6 +66,7 @@ export type AccountSummary = {
   keep_alive?: boolean | null
   shutdown_mode?: string
   schedule_enabled?: boolean
+  schedule_mode?: 'simple' | 'advanced'
   start_time?: string
   stop_time?: string
   daily_report?: boolean | null
@@ -81,6 +90,7 @@ export const emptyAccount = (): Account => ({
   instance_id: '',
   max_traffic: 200,
   schedule_enabled: false,
+  schedule_mode: 'simple',
   start_time: '08:00',
   stop_time: '23:30',
   remark: '',

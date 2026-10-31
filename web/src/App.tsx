@@ -1,10 +1,10 @@
 import { Children, cloneElement, isValidElement, lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
-import type { ReactElement } from 'react'
+import type { CSSProperties, ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  Activity, AlertTriangle, ArrowLeft, ArrowRight, Bell, Check, ChevronDown, ChevronRight, CircleDollarSign,
-  Clock3, Cloud, Copy, Database, ExternalLink, Eye, EyeOff, FileClock, FileText, Fingerprint, Gauge,
-  Globe2, History as HistoryIcon, Info, KeyRound, LoaderCircle, LockKeyhole, LogOut,
+	  Activity, AlertTriangle, ArrowLeft, ArrowRight, Bell, CalendarClock, Check, ChevronDown, ChevronRight, CircleDollarSign,
+	  Clock3, Cloud, Copy, Database, ExternalLink, Eye, EyeOff, FileClock, FileText, Fingerprint, Gauge,
+	  Globe2, History as HistoryIcon, Info, KeyRound, LoaderCircle, LockKeyhole, LogOut, MapPin,
   Mail, Menu, Play, Plus, Power, RefreshCw, Save, Search, Server, Settings, ShieldCheck,
   Trash2, UserCog, Webhook, X, Zap,
 } from 'lucide-react'
@@ -277,6 +277,7 @@ function Dashboard({ status, config, onRefresh, onSettings, onAdmin, onHistory, 
   status: StatusResponse; config: Config; onRefresh: (fresh?: boolean) => Promise<void>; onSettings: () => void; onAdmin: () => void; onHistory: (account: AccountSummary) => void; onConfigChange?: (config: Config) => void; notify: (message: string, tone?: Toast['tone']) => void; onLogout: () => void
 }) {
   const [configuringAccount, setConfiguringAccount] = useState<Account | null>(null)
+	const [ipSelection, setIPSelection] = useState<{ account: AccountSummary; anchor: HTMLElement } | null>(null)
   const [busy, setBusy] = useState<Record<number, string>>({})
   const [mobileMenu, setMobileMenu] = useState(false)
   const [refreshingAll, setRefreshingAll] = useState(false)
@@ -293,6 +294,7 @@ function Dashboard({ status, config, onRefresh, onSettings, onAdmin, onHistory, 
         keep_alive: accountSummary.keep_alive ?? found.keep_alive,
         shutdown_mode: (accountSummary.shutdown_mode as Account['shutdown_mode']) ?? found.shutdown_mode ?? '',
         schedule_enabled: accountSummary.schedule_enabled ?? found.schedule_enabled,
+			schedule_mode: accountSummary.schedule_mode ?? found.schedule_mode ?? ((found.start_cron || found.stop_cron) ? 'advanced' : 'simple'),
         start_time: accountSummary.start_time ?? found.start_time,
         stop_time: accountSummary.stop_time ?? found.stop_time,
         daily_report: accountSummary.daily_report ?? found.daily_report,
@@ -307,6 +309,7 @@ function Dashboard({ status, config, onRefresh, onSettings, onAdmin, onHistory, 
         instance_id: '',
         max_traffic: accountSummary.flow_total,
         schedule_enabled: accountSummary.schedule_enabled || false,
+			schedule_mode: accountSummary.schedule_mode || 'simple',
         start_time: accountSummary.start_time || '08:00',
         stop_time: accountSummary.stop_time || '23:30',
         remark: accountSummary.remark,
@@ -364,7 +367,7 @@ function Dashboard({ status, config, onRefresh, onSettings, onAdmin, onHistory, 
   const leave = () => { setMobileMenu(false); void logout() }
 
   return (
-    <main className="app-shell">
+	    <main className="app-shell">
       <header className="topbar">
         <div className="brand-lockup"><BrandMark /><div><b>CDT MONITOR</b><span>CONTROL PLANE</span></div></div>
         <div id="dashboard-actions" className={`topbar-actions ${mobileMenu ? 'open' : ''}`} aria-busy={refreshingAll}>
@@ -391,12 +394,13 @@ function Dashboard({ status, config, onRefresh, onSettings, onAdmin, onHistory, 
         <button className="empty-state" onClick={onSettings}><Cloud /><h3>添加第一个云端实例</h3><p>进入设置完成 AccessKey 与实例信息配置</p><span>打开设置<ChevronRight size={16} /></span></button>
       ) : (
         <section className="account-grid">
-          {status.accounts.map((account) => <AccountCard key={account.id} account={account} busy={refreshingAll ? 'refresh' : busy[account.id]} keepAlive={config.keep_alive} billingEnabled={config.enable_billing} onAction={(action) => void runAction(account, action)} onConfigure={() => openInstanceSettings(account)} onHistory={() => onHistory(account)} />)}
+			          {status.accounts.map((account) => <AccountCard key={account.id} account={account} busy={refreshingAll ? 'refresh' : busy[account.id]} keepAlive={config.keep_alive} billingEnabled={config.enable_billing} onAction={(action) => void runAction(account, action)} onConfigure={() => openInstanceSettings(account)} onHistory={() => onHistory(account)} onIP={(anchor) => setIPSelection({ account, anchor })} />)}
         </section>
       )}
       {configuringAccount && (
         <InstanceSettingsModal
           account={configuringAccount}
+	          timezone={config.timezone}
           onClose={() => setConfiguringAccount(null)}
           onSaved={(updated) => {
             const nextAccounts = config.accounts.map((a) => (a.id === updated.id ? { ...a, ...updated } : a))
@@ -407,20 +411,21 @@ function Dashboard({ status, config, onRefresh, onSettings, onAdmin, onHistory, 
           notify={notify}
         />
       )}
+			      {ipSelection && <PublicIPModal account={ipSelection.account} anchor={ipSelection.anchor} instanceID={config.accounts.find((item) => item.id === ipSelection.account.id)?.instance_id || ''} onClose={() => setIPSelection(null)} />}
     </main>
   )
 }
 
-function AccountCard({ account, busy, keepAlive, billingEnabled, onAction, onConfigure, onHistory }: { account: AccountSummary; busy?: string; keepAlive: boolean; billingEnabled: boolean; onAction: (action: 'start' | 'stop' | 'refresh') => void; onConfigure: () => void; onHistory: () => void }) {
+function AccountCard({ account, busy, keepAlive, billingEnabled, onAction, onConfigure, onHistory, onIP }: { account: AccountSummary; busy?: string; keepAlive: boolean; billingEnabled: boolean; onAction: (action: 'start' | 'stop' | 'refresh') => void; onConfigure: () => void; onHistory: () => void; onIP: (anchor: HTMLElement) => void }) {
   const statusTone = statusClass(account.instance_status)
   const currency = account.currency === 'USD' ? '$' : '¥'
   const hasBilling = account.monthly_cost !== undefined || account.balance !== undefined
   const effectiveKeepAlive = account.keep_alive != null ? account.keep_alive : keepAlive
   return (
     <article className={`glass-card account-card ${account.over_threshold ? 'account-card--alert' : ''}`}>
-      <header className="account-card__header">
+	      <header className="account-card__header">
         <div className={`status-icon ${statusTone}`}><Server size={20} /></div>
-        <div className="account-title"><h3>{account.remark || account.account}</h3><span>{account.region_name}</span></div>
+	        <div className="account-title"><h3>{account.remark || account.account}</h3><div className="account-title__meta"><MapPin size={13} aria-hidden="true" /><span>{account.region_name}</span><button type="button" className="account-ip-button" onClick={(event) => { const anchor = event.currentTarget.closest('.account-card') as HTMLElement | null; if (anchor) onIP(anchor) }} aria-label="查看公网 IP"><Globe2 size={13} />IP</button></div></div>
         <div className="account-card__side">
           <div className={`status-pill ${statusTone}`}><i />{statusLabel(account.instance_status)}</div>
           {billingEnabled && <div className="account-billing" aria-label="账单与余额"><div><span>本月费用</span><b>{account.monthly_cost === undefined ? '待同步' : `${currency}${account.monthly_cost.toFixed(2)}`}</b></div><div><span>账户余额</span><b>{account.balance === undefined ? '待同步' : `${currency}${account.balance.toFixed(2)}`}</b></div><small className={account.billing_error ? 'billing-error' : ''}>{account.billing_error || (hasBilling ? '已同步' : '待同步')}</small></div>}
@@ -442,13 +447,58 @@ function AccountCard({ account, busy, keepAlive, billingEnabled, onAction, onCon
   )
 }
 
+function PublicIPModal({ account, anchor, instanceID, onClose }: { account: AccountSummary; anchor: HTMLElement; instanceID: string; onClose: () => void }) {
+  const panelRef = useRef<HTMLElement>(null)
+  const [position, setPosition] = useState({ left: 0, top: 0 })
+  const addresses = [account.public_ip, account.public_ipv6].filter((value): value is string => Boolean(value))
+  const copyIP = (value: string) => {
+    if (value) void navigator.clipboard?.writeText(value)
+  }
+  useLayoutEffect(() => {
+    const updatePosition = () => {
+      const panel = panelRef.current
+      const rect = anchor.getBoundingClientRect()
+	      const width = Math.min(360, window.innerWidth - 28)
+      const height = panel?.offsetHeight || 320
+      const isMobile = window.matchMedia('(max-width: 640px)').matches
+      const centerX = isMobile ? window.innerWidth / 2 : rect.left + rect.width / 2
+      const centerY = isMobile ? window.innerHeight / 2 : rect.top + rect.height / 2
+      setPosition({
+	        left: Math.max(width / 2 + 14, Math.min(window.innerWidth - width / 2 - 14, centerX)),
+        top: Math.max(height / 2 + 12, Math.min(window.innerHeight - height / 2 - 12, centerY)),
+      })
+    }
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    window.addEventListener('scroll', updatePosition, true)
+    return () => {
+      window.removeEventListener('resize', updatePosition)
+      window.removeEventListener('scroll', updatePosition, true)
+    }
+  }, [anchor])
+  return <div className="modal-layer modal-layer--nested modal-layer--public-ip" role="dialog" aria-modal="true" aria-label="公网 IP 信息" style={{ '--ip-modal-x': `${position.left}px`, '--ip-modal-y': `${position.top}px` } as CSSProperties}>
+    <div className="modal-scrim" onClick={onClose} />
+    <section ref={panelRef} className="glass-panel public-ip-modal">
+      <header><div><p className="eyebrow">NETWORK IDENTITY</p><h2>公网 IP</h2><p className="public-ip-context">{account.remark || account.account}<span aria-hidden="true">·</span>{account.region_name}</p></div><IconButton label="关闭" onClick={onClose}><X /></IconButton></header>
+      <div className="public-ip-modal__body">
+        <div className="public-ip-addresses">
+          {addresses.length ? addresses.map((value) => { const version = value === account.public_ipv6 ? 'IPv6' : 'IPv4'; return <div className="public-ip-value" key={value}><div className="public-ip-value__copy"><span className="public-ip-value__type">{version}</span><strong>{value}</strong></div><IconButton className="public-ip-copy-button" label={`复制 ${version} 地址`} onClick={() => copyIP(value)}><Copy /></IconButton></div> }) : <div className="public-ip-empty"><Globe2 size={18} /><span>{account.ip_updated_at ? '未分配公网地址' : '等待首次同步'}</span></div>}
+        </div>
+        {instanceID && <div className="public-ip-instance"><span>实例 ID</span><code>{instanceID}</code></div>}
+      </div>
+    </section>
+  </div>
+}
+
 function InstanceSettingsModal({
   account,
+  timezone,
   onClose,
   onSaved,
   notify,
 }: {
   account: Account
+  timezone: string
   onClose: () => void
   onSaved: (account: Account) => void
   notify: (message: string, tone?: Toast['tone']) => void
@@ -458,18 +508,24 @@ function InstanceSettingsModal({
     keep_alive?: boolean | null
     shutdown_mode: '' | 'KeepCharging' | 'StopCharging'
     schedule_enabled: boolean
+	    schedule_mode: 'simple' | 'advanced'
     start_time: string
     stop_time: string
     daily_report?: boolean | null
     daily_report_time: string
+    start_cron: string
+    stop_cron: string
   }>({
     keep_alive: account.keep_alive,
     shutdown_mode: (account.shutdown_mode as '' | 'KeepCharging' | 'StopCharging') || '',
     schedule_enabled: account.schedule_enabled,
+	    schedule_mode: account.schedule_mode || ((account.start_cron || account.stop_cron) ? 'advanced' : 'simple'),
     start_time: account.start_time || '08:00',
     stop_time: account.stop_time || '23:30',
     daily_report: account.daily_report,
     daily_report_time: account.daily_report_time || '00:00',
+    start_cron: account.start_cron || '',
+    stop_cron: account.stop_cron || '',
   })
 
   const save = async () => {
@@ -479,10 +535,13 @@ function InstanceSettingsModal({
         keep_alive: form.keep_alive,
         shutdown_mode: form.shutdown_mode || 'default',
         schedule_enabled: form.schedule_enabled,
+	        schedule_mode: form.schedule_mode,
         start_time: form.start_time,
         stop_time: form.stop_time,
         daily_report: form.daily_report,
         daily_report_time: form.daily_report_time || '00:00',
+        start_cron: form.start_cron,
+        stop_cron: form.stop_cron,
       }
       const updated = await api<Account>(`/api/v1/accounts/${account.id}/settings`, {
         method: 'PATCH',
@@ -537,18 +596,7 @@ function InstanceSettingsModal({
               onChange={(val) => setForm({ ...form, shutdown_mode: val === 'default' ? '' : (val as '' | 'KeepCharging' | 'StopCharging') })}
             />
           </div>
-          <ToggleRow
-            title="每日定时开关机"
-            icon={<Clock3 />}
-            checked={form.schedule_enabled}
-            onChange={(checked) => setForm({ ...form, schedule_enabled: checked })}
-          />
-          {form.schedule_enabled && (
-            <div className="form-grid" style={{ marginTop: '4px' }}>
-              <TimePicker label="开机时间" value={form.start_time} onChange={(value) => setForm({ ...form, start_time: value })} />
-              <TimePicker label="关机时间" value={form.stop_time} onChange={(value) => setForm({ ...form, stop_time: value })} />
-            </div>
-          )}
+	      <ScheduleOrchestrator enabled={form.schedule_enabled} mode={form.schedule_mode} startTime={form.start_time} stopTime={form.stop_time} startCron={form.start_cron} stopCron={form.stop_cron} timezone={timezone} onChange={(patch) => setForm((current) => ({ ...current, ...patch }))} />
           <div className="field">
             <label>参与日报推送</label>
             <Segmented
@@ -560,9 +608,9 @@ function InstanceSettingsModal({
               ]}
               onChange={(val) => setForm({ ...form, daily_report: val === 'default' ? null : val === 'enabled' })}
             />
-            {form.schedule_enabled && <ScheduleReportNote stopTime={form.stop_time} />}
+	          {form.schedule_enabled && form.schedule_mode === 'simple' && <ScheduleReportNote stopTime={form.stop_time} />}
           </div>
-          {!form.schedule_enabled && (
+	      {(!form.schedule_enabled || form.schedule_mode === 'advanced') && (
             <div>
               <TimePicker label="日报推送时间" value={form.daily_report_time || '00:00'} onChange={(value) => setForm({ ...form, daily_report_time: value })} />
               <DailyReportNote time={form.daily_report_time} />
@@ -666,11 +714,11 @@ function AccountSettings({ config, onChange }: { config: Config; onChange: (conf
     onChange({ ...config, accounts })
   }
   return <div className="settings-section"><div className="section-title-row"><SectionTitle icon={<Server />} title="云端实例" subtitle="ALIYUN ACCOUNTS" /><button className="button button--secondary button--small" onClick={() => onChange({ ...config, accounts: [...config.accounts, emptyAccount()] })}><Plus />添加实例</button></div>
-    <div className="account-settings-list">{config.accounts.length === 0 && <div className="subtle-empty"><Database />尚未配置实例</div>}{config.accounts.map((account, index) => <div className="account-editor" key={account.id || `new-${index}`}><div className="account-editor__head"><span>{account.remark || `实例 ${index + 1}`}</span><div className="account-editor__actions"><IconButton label="复制" onClick={() => clone(index)}><Copy /></IconButton><IconButton label="删除" tone="danger" onClick={() => remove(index)}><Trash2 /></IconButton></div></div><AccountFields account={account} onChange={(next) => update(index, next)} /></div>)}</div>
+	    <div className="account-settings-list">{config.accounts.length === 0 && <div className="subtle-empty"><Database />尚未配置实例</div>}{config.accounts.map((account, index) => <div className="account-editor" key={account.id || `new-${index}`}><div className="account-editor__head"><span>{account.remark || `实例 ${index + 1}`}</span><div className="account-editor__actions"><IconButton label="复制" onClick={() => clone(index)}><Copy /></IconButton><IconButton label="删除" tone="danger" onClick={() => remove(index)}><Trash2 /></IconButton></div></div><AccountFields account={account} timezone={config.timezone} onChange={(next) => update(index, next)} /></div>)}</div>
   </div>
 }
 
-function AccountFields({ account, onChange, compact = false }: { account: Account; onChange: (account: Account) => void; compact?: boolean }) {
+function AccountFields({ account, timezone = 'Asia/Shanghai', onChange, compact = false }: { account: Account; timezone?: string; onChange: (account: Account) => void; compact?: boolean }) {
   return <div className={`form-grid account-fields ${compact ? 'compact' : ''}`}>
     <Field label="AccessKey ID"><input autoComplete="off" value={account.access_key_id} onChange={(event) => onChange({ ...account, access_key_id: event.target.value })} placeholder="LTAI5t…" /></Field>
     <Field label={`AccessKey Secret${account.secret_configured ? ' · 已配置' : ''}`}><input type="password" autoComplete="new-password" value={account.access_key_secret || ''} onChange={(event) => onChange({ ...account, access_key_secret: event.target.value })} placeholder={account.secret_configured ? '留空保持不变' : '输入 Secret'} /></Field>
@@ -679,10 +727,10 @@ function AccountFields({ account, onChange, compact = false }: { account: Accoun
     <Field label="流量额度"><input type="number" min={1} value={account.max_traffic} onChange={(event) => onChange({ ...account, max_traffic: Number(event.target.value) })} /><span className="suffix">GB</span></Field>
     <SelectField label="站点类型" value={account.site_type} options={[{ value: 'china', label: '中国站', meta: 'CNY' }, { value: 'international', label: '国际站', meta: 'USD' }]} onChange={(value) => onChange({ ...account, site_type: value as Account['site_type'] })} />
     <Field label="备注"><input value={account.remark} onChange={(event) => onChange({ ...account, remark: event.target.value })} placeholder="香港主节点" /></Field>
-    <ToggleRow title="每日定时开关机" icon={<Clock3 />} checked={account.schedule_enabled} onChange={(checked) => onChange({ ...account, schedule_enabled: checked })} />
-    {account.schedule_enabled && <><TimePicker label="开机时间" value={account.start_time} onChange={(value) => onChange({ ...account, start_time: value })} /><TimePicker label="关机时间" value={account.stop_time} onChange={(value) => onChange({ ...account, stop_time: value })} /></>}
-    {!compact && (
-      <div className="account-fields__full">
+	    {compact ? <>
+	      <ToggleRow title="每日定时开关机" icon={<Clock3 />} checked={account.schedule_enabled} onChange={(checked) => onChange({ ...account, schedule_enabled: checked })} />
+	      {account.schedule_enabled && <><TimePicker label="开机时间" value={account.start_time} onChange={(value) => onChange({ ...account, start_time: value })} /><TimePicker label="关机时间" value={account.stop_time} onChange={(value) => onChange({ ...account, stop_time: value })} /></>}
+	    </> : <div className="account-fields__full"><ScheduleOrchestrator enabled={account.schedule_enabled} mode={account.schedule_mode || ((account.start_cron || account.stop_cron) ? 'advanced' : 'simple')} startTime={account.start_time} stopTime={account.stop_time} startCron={account.start_cron || ''} stopCron={account.stop_cron || ''} timezone={timezone} onChange={(patch) => onChange({ ...account, ...patch })} />
         <div className="field">
           <label>参与日报推送</label>
           <Segmented
@@ -697,17 +745,113 @@ function AccountFields({ account, onChange, compact = false }: { account: Accoun
               daily_report: val === 'default' ? null : val === 'enabled',
             })}
           />
-          {account.schedule_enabled && <ScheduleReportNote stopTime={account.stop_time} />}
+          {account.schedule_enabled && account.schedule_mode !== 'advanced' && <ScheduleReportNote stopTime={account.stop_time} />}
         </div>
-        {!account.schedule_enabled && (
+	        {(!account.schedule_enabled || account.schedule_mode === 'advanced') && (
           <div>
             <TimePicker label="日报推送时间" value={account.daily_report_time || '00:00'} onChange={(value) => onChange({ ...account, daily_report_time: value })} />
             <DailyReportNote time={account.daily_report_time} />
           </div>
         )}
       </div>
-    )}
+	    }
   </div>
+}
+
+function ScheduleOrchestrator({ enabled, mode, startTime, stopTime, startCron, stopCron, timezone, onChange }: { enabled: boolean; mode: 'simple' | 'advanced'; startTime: string; stopTime: string; startCron: string; stopCron: string; timezone: string; onChange: (patch: Partial<Pick<Account, 'schedule_enabled' | 'schedule_mode' | 'start_time' | 'stop_time' | 'start_cron' | 'stop_cron'>>) => void }) {
+  return <section className="schedule-orchestrator" aria-label="定时任务编排">
+    <header className="schedule-orchestrator__head"><div className="schedule-orchestrator__title"><span><CalendarClock size={17} /></span><div><h3>定时任务编排</h3><p>{mode === 'simple' ? '按每日时间开机与关机' : '按 Cron 表达式执行开机与关机'}</p></div></div><label className="schedule-enabled"><span>启用</span><input type="checkbox" checked={enabled} onChange={(event) => onChange({ schedule_enabled: event.target.checked })} /><i><em /></i></label></header>
+    <div className="schedule-orchestrator__mode" role="group" aria-label="定时任务模式" data-mode={mode}><span className="schedule-orchestrator__thumb" aria-hidden="true" /><button type="button" aria-pressed={mode === 'simple'} onClick={() => onChange({ schedule_mode: 'simple' })}>简单</button><button type="button" aria-pressed={mode === 'advanced'} onClick={() => onChange({ schedule_mode: 'advanced' })}>进阶</button></div>
+    {enabled && (mode === 'simple' ? <div className="schedule-time-grid"><TimePicker label="开机时间" value={startTime} onChange={(value) => onChange({ start_time: value })} /><TimePicker label="关机时间" value={stopTime} onChange={(value) => onChange({ stop_time: value })} /></div> : <div className="cron-schedules"><CronScheduleEditor label="定时开机" value={startCron} timezone={timezone} defaultCron="0 0 1 * *" onChange={(value) => onChange({ start_cron: value })} /><CronScheduleEditor label="定时关机" value={stopCron} timezone={timezone} defaultCron="0 0 15 * *" onChange={(value) => onChange({ stop_cron: value })} /></div>)}
+  </section>
+}
+
+function CronScheduleEditor({ label, value, timezone, defaultCron, onChange }: { label: string; value: string; timezone: string; defaultCron: string; onChange: (value: string) => void }) {
+  const selectId = useId()
+  const daySelectId = useId()
+  const [preview, setPreview] = useState<string[]>([])
+  const [previewError, setPreviewError] = useState('')
+  const [previewBusy, setPreviewBusy] = useState(false)
+  const [mode, setMode] = useState<'off' | 'daily' | 'weekly' | 'monthly' | 'custom'>(() => cronMode(value))
+  useEffect(() => setMode(cronMode(value)), [value])
+  const parts = (value || defaultCron).trim().split(/\s+/)
+  const minute = /^\d+$/.test(parts[0] || '') ? Number(parts[0]) : 0
+  const hour = /^\d+$/.test(parts[1] || '') ? Number(parts[1]) : 0
+  const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+  const day = parts[2] !== '*' && /^\d+$/.test(parts[2] || '') ? parts[2] : (defaultCron.split(/\s+/)[2] === '*' ? '1' : defaultCron.split(/\s+/)[2])
+  const weekday = parts[4] !== '*' && /^\d$/.test(parts[4] || '') ? parts[4] : '1'
+  const updateMode = (next: 'off' | 'daily' | 'weekly' | 'monthly' | 'custom') => {
+    setMode(next)
+    if (next === 'off') onChange('')
+    else if (next !== 'custom') onChange(buildCron(next, time, day, weekday))
+    else if (!value) onChange(defaultCron)
+  }
+  const updateTime = (next: string) => {
+    const [nextHour, nextMinute] = next.split(':')
+    onChange(buildCron(mode, next, day, weekday, Number(nextMinute), Number(nextHour)))
+  }
+  const updateDay = (next: string) => onChange(buildCron(mode, time, next, weekday))
+  const updateWeekday = (next: string) => onChange(buildCron(mode, time, day, next))
+  const weekdayOptions = ['1', '2', '3', '4', '5', '6', '0'].map((value) => ({
+    value,
+    label: value === '0' ? '周日' : `周${['一', '二', '三', '四', '五', '六'][Number(value) - 1]}`,
+  }))
+  const previewPlan = async () => {
+    if (!value.trim()) {
+      setPreview([])
+      setPreviewError('先选择或输入一个表达式')
+      return
+    }
+    setPreviewBusy(true)
+    setPreviewError('')
+    try {
+      const result = await api<{ occurrences: string[] }>('/api/v1/schedules/preview', { method: 'POST', body: JSON.stringify({ expression: value, timezone, count: 5 }) })
+      setPreview(result.occurrences.map((item) => formatScheduleTime(item, timezone)))
+    } catch (error) {
+      setPreview([])
+      setPreviewError(error instanceof Error ? error.message : '表达式无法预览')
+    } finally {
+      setPreviewBusy(false)
+    }
+  }
+  return <div className="cron-editor">
+    <div className="cron-editor__head"><div><label>{label}</label><span>五字段：分 时 日 月 周</span></div><button type="button" className="button button--secondary button--small cron-preview-button" disabled={previewBusy || !value} onClick={() => void previewPlan()}>{previewBusy ? <LoaderCircle className="spin" /> : <CalendarClock />}预览</button></div>
+    <div className="cron-editor__row">
+      <div className="cron-select"><ElegantSelect id={selectId} value={mode} options={[{ value: 'off', label: '不启用' }, { value: 'daily', label: '每天' }, { value: 'weekly', label: '每周' }, { value: 'monthly', label: '每月' }, { value: 'custom', label: '自定义' }]} onChange={(next) => updateMode(next as typeof mode)} searchable={false} searchPlaceholder="" /></div>
+      {mode === 'custom' ? <input className="cron-expression" aria-label={`${label}表达式`} value={value} placeholder="0 0 1 * *" onChange={(event) => onChange(event.target.value)} /> : mode !== 'off' ? <div className="cron-schedule-fields">
+        <TimePicker label={`${label}时间`} value={time} onChange={updateTime} />
+        {mode === 'monthly' && <div className="cron-select cron-select--day"><ElegantSelect id={daySelectId} value={day} options={Array.from({ length: 31 }, (_, index) => ({ value: String(index + 1), label: `${index + 1}日` }))} onChange={updateDay} searchable={false} searchPlaceholder="" /></div>}
+        {mode === 'weekly' && <div className="cron-select cron-select--day"><ElegantSelect id={daySelectId} value={weekday} options={weekdayOptions} onChange={updateWeekday} searchable={false} searchPlaceholder="" /></div>}
+      </div> : <span className="cron-disabled">未启用</span>}
+    </div>
+    {value && <code className="cron-expression-preview">{value}</code>}
+    {previewError && <p className="cron-feedback cron-feedback--error"><AlertTriangle size={14} />{previewError}</p>}
+    {preview.length > 0 && <div className="cron-preview"><span>未来 5 次 · {timezone}</span>{preview.map((item) => <time key={item}>{item}</time>)}</div>}
+  </div>
+}
+
+function cronMode(value: string): 'off' | 'daily' | 'weekly' | 'monthly' | 'custom' {
+  if (!value.trim()) return 'off'
+  const fields = value.trim().split(/\s+/)
+  if (fields.length !== 5 || !/^\d+$/.test(fields[0]) || !/^\d+$/.test(fields[1]) || fields[3] !== '*') return 'custom'
+  if (/^\d+$/.test(fields[2]) && fields[4] === '*') return 'monthly'
+  if (fields[2] === '*' && /^\d$/.test(fields[4])) return 'weekly'
+  if (fields[2] === '*' && fields[4] === '*') return 'daily'
+  return 'custom'
+}
+
+function buildCron(mode: 'daily' | 'weekly' | 'monthly' | 'custom' | 'off', time: string, day: string, weekday: string, minute?: number, hour?: number) {
+  const [parsedHour = '00', parsedMinute = '00'] = time.split(':')
+  const hourValue = String(hour ?? Number(parsedHour)).padStart(2, '0')
+  const minuteValue = String(minute ?? Number(parsedMinute)).padStart(2, '0')
+  if (mode === 'monthly') return `${Number(minuteValue)} ${Number(hourValue)} ${day} * *`
+  if (mode === 'weekly') return `${Number(minuteValue)} ${Number(hourValue)} * * ${weekday}`
+  return `${Number(minuteValue)} ${Number(hourValue)} * * *`
+}
+
+function formatScheduleTime(value: string, timezone: string) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('sv-SE', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(date)
 }
 
 function ScheduleReportNote({ stopTime }: { stopTime: string }) {

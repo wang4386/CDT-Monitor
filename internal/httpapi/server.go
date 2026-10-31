@@ -23,6 +23,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/wang4386/CDT-Monitor/internal/domain"
 	"github.com/wang4386/CDT-Monitor/internal/engine"
+	"github.com/wang4386/CDT-Monitor/internal/scheduler"
 	"github.com/wang4386/CDT-Monitor/internal/security"
 	"github.com/wang4386/CDT-Monitor/internal/store"
 )
@@ -99,6 +100,7 @@ func New(st *store.Store, eng *engine.Engine, assets fs.FS, logger *slog.Logger,
 	mux.Handle("POST /api/v1/accounts/{id}/refresh", s.require("instance:control", http.HandlerFunc(s.refresh)))
 	mux.Handle("POST /api/v1/accounts/{id}/actions/{action}", s.require("instance:control", http.HandlerFunc(s.control)))
 	mux.Handle("PATCH /api/v1/accounts/{id}/settings", s.require("admin", http.HandlerFunc(s.updateAccountSettings)))
+	mux.Handle("POST /api/v1/schedules/preview", s.require("admin", http.HandlerFunc(s.previewSchedule)))
 	mux.Handle("POST /api/v1/notifications/daily-report", s.require("admin", http.HandlerFunc(s.triggerDailyReport)))
 	mux.Handle("GET /api/v1/jobs/{id}", s.require("widget:read", http.HandlerFunc(s.job)))
 	mux.Handle("GET /api/v1/logs", s.require("admin", http.HandlerFunc(s.logs)))
@@ -166,6 +168,10 @@ func (s *Server) setup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	applyConfigDefaults(&config)
+	if err := validateAccountCrons(config.Accounts); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_cron", err.Error())
+		return
+	}
 	if err := s.store.Setup(r.Context(), config); err != nil {
 		writeError(w, http.StatusBadRequest, "setup_failed", err.Error())
 		return
@@ -565,8 +571,18 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	applyConfigDefaults(&config)
+	if err := validateAccountCrons(config.Accounts); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_cron", err.Error())
+		return
+	}
 	for index := range config.Accounts {
 		account := &config.Accounts[index]
+		if account.ScheduleMode != "simple" && account.ScheduleMode != "advanced" {
+			account.ScheduleMode = "simple"
+			if account.StartCron != "" || account.StopCron != "" {
+				account.ScheduleMode = "advanced"
+			}
+		}
 		var err error
 		account.StartTime, err = normalizeClockTime(account.StartTime, account.ScheduleEnabled)
 		if err != nil {
@@ -962,6 +978,33 @@ func applyConfigDefaults(config *domain.Config) {
 	}
 }
 
+func validateAccountCrons(accounts []domain.Account) error {
+	for index := range accounts {
+		accounts[index].StartCron = strings.TrimSpace(accounts[index].StartCron)
+		accounts[index].StopCron = strings.TrimSpace(accounts[index].StopCron)
+		if err := validateCronPair(accounts[index].StartCron, accounts[index].StopCron); err != nil {
+			name := accounts[index].Remark
+			if name == "" {
+				name = fmt.Sprintf("实例 %d", index+1)
+			}
+			return fmt.Errorf("%s：%w", name, err)
+		}
+	}
+	return nil
+}
+
+func validateCronPair(startCron, stopCron string) error {
+	for label, expression := range map[string]string{"开机": startCron, "关机": stopCron} {
+		if expression == "" {
+			continue
+		}
+		if _, err := scheduler.Parse(expression); err != nil {
+			return fmt.Errorf("%s Cron 表达式无效：%v", label, err)
+		}
+	}
+	return nil
+}
+
 func scrubConfig(config *domain.Config) {
 	config.AdminPassword = ""
 	config.Notifications.Email.Password = ""
@@ -1015,10 +1058,13 @@ type accountSettingsInput struct {
 	KeepAlive       NullableBool `json:"keep_alive"`
 	ShutdownMode    *string      `json:"shutdown_mode"`
 	ScheduleEnabled *bool        `json:"schedule_enabled"`
+	ScheduleMode    *string      `json:"schedule_mode"`
 	StartTime       *string      `json:"start_time"`
 	StopTime        *string      `json:"stop_time"`
 	DailyReport     NullableBool `json:"daily_report"`
 	DailyReportTime *string      `json:"daily_report_time"`
+	StartCron       *string      `json:"start_cron"`
+	StopCron        *string      `json:"stop_cron"`
 }
 
 func (s *Server) updateAccountSettings(w http.ResponseWriter, r *http.Request) {
@@ -1056,6 +1102,20 @@ func (s *Server) updateAccountSettings(w http.ResponseWriter, r *http.Request) {
 	if input.ScheduleEnabled != nil {
 		scheduleEnabled = *input.ScheduleEnabled
 	}
+	mode := account.ScheduleMode
+	if input.ScheduleMode != nil {
+		mode = strings.TrimSpace(*input.ScheduleMode)
+	}
+	if mode == "" {
+		mode = "simple"
+		if account.StartCron != "" || account.StopCron != "" {
+			mode = "advanced"
+		}
+	}
+	if mode != "simple" && mode != "advanced" {
+		writeError(w, http.StatusBadRequest, "invalid_schedule_mode", "定时任务模式必须为 simple 或 advanced")
+		return
+	}
 	startTime := account.StartTime
 	if input.StartTime != nil {
 		startTime = *input.StartTime
@@ -1087,7 +1147,18 @@ func (s *Server) updateAccountSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_daily_report_time", "日报时间必须使用 24 小时制 HH:MM 格式")
 		return
 	}
-	if err := s.store.UpdateAccountSettings(r.Context(), id, keepAlive, shutdownMode, scheduleEnabled, startTime, stopTime, dailyReport, dailyReportTime); err != nil {
+	startCron, stopCron := account.StartCron, account.StopCron
+	if input.StartCron != nil {
+		startCron = strings.TrimSpace(*input.StartCron)
+	}
+	if input.StopCron != nil {
+		stopCron = strings.TrimSpace(*input.StopCron)
+	}
+	if err := validateCronPair(startCron, stopCron); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_cron", err.Error())
+		return
+	}
+	if err := s.store.UpdateAccountSettingsWithScheduleMode(r.Context(), id, keepAlive, shutdownMode, scheduleEnabled, mode, startTime, stopTime, dailyReport, dailyReportTime, startCron, stopCron, true); err != nil {
 		writeError(w, http.StatusInternalServerError, "update_failed", err.Error())
 		return
 	}
@@ -1099,6 +1170,31 @@ func (s *Server) updateAccountSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	updated.AccessKeySecret = ""
 	writeJSON(w, http.StatusOK, updated)
+}
+
+func (s *Server) previewSchedule(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Expression string `json:"expression"`
+		Timezone   string `json:"timezone"`
+		Count      int    `json:"count"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	input.Expression = strings.TrimSpace(input.Expression)
+	if input.Timezone == "" {
+		input.Timezone = "Asia/Shanghai"
+	}
+	if input.Count == 0 {
+		input.Count = 5
+	}
+	occurrences, err := scheduler.NextOccurrences(input.Expression, input.Timezone, time.Now(), input.Count)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_cron", "Cron 表达式无效："+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"expression": input.Expression, "timezone": input.Timezone, "occurrences": occurrences})
 }
 
 func normalizeClockTime(value string, required bool) (string, error) {
