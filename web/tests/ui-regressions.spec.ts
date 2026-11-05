@@ -137,6 +137,138 @@ test('dashboard remains contained across supported viewport widths', async ({ pa
   }
 })
 
+test('IP card centers by viewport and both schedule editors expose advanced Cron mode', async ({ page }, testInfo) => {
+	const account = {
+		id: 1,
+		account: 'LTAI5te***',
+		remark: '香港测试节点',
+		region: 'cn-hongkong',
+		region_name: '中国香港',
+		flow_total: 200,
+		flow_used: 12.5,
+		percentage: 6.25,
+		threshold: 95,
+		over_threshold: false,
+		instance_status: 'Running',
+		public_ip: '203.0.113.10',
+		public_ipv6: '2001:db8::10',
+		ip_updated_at: new Date().toISOString(),
+		last_updated: new Date().toISOString(),
+		stale: false,
+		schedule_enabled: true,
+		schedule_mode: 'simple',
+		start_time: '08:00',
+		stop_time: '23:30',
+	}
+	const accountConfig = { ...config, accounts: [{ ...config.accounts[0], schedule_enabled: true, schedule_mode: 'simple' as const }] }
+	await page.route('**/api/v1/system/init-status', (route) => route.fulfill({ json: { initialized: true } }))
+	await page.route('**/api/v1/status', (route) => route.fulfill({ json: { accounts: [account], system_last_run: new Date().toISOString() } }))
+	await page.route('**/api/v1/config', (route) => route.fulfill({ json: accountConfig }))
+
+	await page.setViewportSize({ width: 1440, height: 900 })
+	await page.goto('/')
+	await page.waitForTimeout(800)
+	await page.getByRole('button', { name: '查看公网 IP' }).click()
+	const ipCard = page.locator('.public-ip-modal')
+	await expect(ipCard).toBeVisible()
+  await expect(page.getByRole('button', { name: '查看公网 IP' })).toHaveCSS('box-shadow', 'none')
+	await page.waitForTimeout(300)
+	await expect(ipCard.getByText('203.0.113.10')).toBeVisible()
+	await expect(ipCard.getByText('2001:db8::10')).toBeVisible()
+  const copyButton = ipCard.getByRole('button', { name: '复制 IPv4 地址' })
+  await expect(copyButton).toHaveCSS('position', 'static')
+  await expect(copyButton).toHaveCSS('transform', 'none')
+	const desktopCenters = await page.evaluate(() => {
+		const card = document.querySelector<HTMLElement>('.public-ip-modal')!.getBoundingClientRect()
+		const instance = document.querySelector<HTMLElement>('.account-card')!.getBoundingClientRect()
+		return { cardX: card.x + card.width / 2, cardY: card.y + card.height / 2, instanceX: instance.x + instance.width / 2, instanceY: instance.y + instance.height / 2 }
+	})
+	expect(Math.abs(desktopCenters.cardX - desktopCenters.instanceX)).toBeLessThanOrEqual(1)
+	expect(Math.abs(desktopCenters.cardY - desktopCenters.instanceY)).toBeLessThanOrEqual(4)
+	await page.screenshot({ path: testInfo.outputPath('ip-card-desktop.png') })
+	await page.getByRole('button', { name: '关闭', exact: true }).click()
+
+	await page.setViewportSize({ width: 390, height: 844 })
+	await page.getByRole('button', { name: '查看公网 IP' }).click()
+	await expect(ipCard).toBeVisible()
+	await page.waitForTimeout(300)
+	const mobileCenters = await page.evaluate(() => {
+		const card = document.querySelector<HTMLElement>('.public-ip-modal')!.getBoundingClientRect()
+		return { x: card.x + card.width / 2, y: card.y + card.height / 2, width: window.innerWidth, height: window.innerHeight }
+	})
+	expect(Math.abs(mobileCenters.x - mobileCenters.width / 2)).toBeLessThanOrEqual(1)
+	expect(Math.abs(mobileCenters.y - mobileCenters.height / 2)).toBeLessThanOrEqual(1)
+	await page.screenshot({ path: testInfo.outputPath('ip-card-mobile.png') })
+	await page.getByRole('button', { name: '关闭', exact: true }).click()
+
+	await page.getByRole('button', { name: '菜单' }).click()
+	await page.getByRole('button', { name: '设置', exact: true }).click()
+	await page.getByRole('button', { name: '实例', exact: true }).click()
+		const scheduleMode = page.getByRole('group', { name: '定时任务模式' })
+		await scheduleMode.getByRole('button', { name: '进阶' }).click()
+		await expect(scheduleMode).toHaveAttribute('data-mode', 'advanced')
+	await expect(page.locator('.cron-editor')).toHaveCount(2)
+	await expect.poll(async () => page.locator('.cron-editor').evaluateAll((editors) => editors.every((editor) => editor.scrollWidth <= editor.clientWidth + 1))).toBe(true)
+		await expect(page.locator('.cron-editor').first().locator('.cron-editor__head .cron-preview-button')).toBeVisible()
+		await expect(page.locator('.cron-editor').first().locator('.cron-editor__head > svg')).toHaveCount(0)
+		await page.screenshot({ path: testInfo.outputPath('cron-advanced-settings-desktop.png') })
+		await page.locator('.cron-editor').first().locator('.cron-select:not(.cron-select--day) [role="combobox"]').click()
+		await page.getByRole('option', { name: '每周', exact: true }).click()
+		await page.locator('.cron-editor').first().locator('.cron-select--day [role="combobox"]').click()
+		await expect(page.getByRole('option', { name: '周一', exact: true })).toBeVisible()
+		await page.keyboard.press('Escape')
+		await page.locator('.cron-editor').first().locator('.cron-select:not(.cron-select--day) [role="combobox"]').click()
+		await page.getByRole('option', { name: '每月', exact: true }).click()
+		await page.locator('.cron-editor').first().locator('.cron-select--day [role="combobox"]').click()
+		await expect(page.getByRole('option', { name: '1日', exact: true })).toBeVisible()
+		await expect(page.getByRole('option', { name: '每月 1 日', exact: true })).toHaveCount(0)
+		await page.keyboard.press('Escape')
+		const scheduleWidths = await page.locator('.cron-editor').first().evaluate((editor) => {
+			const time = editor.querySelector<HTMLElement>('.time-picker')?.getBoundingClientRect()
+			const day = editor.querySelector<HTMLElement>('.cron-select--day')?.getBoundingClientRect()
+			return { time: time?.width ?? 0, day: day?.width ?? 0 }
+		})
+		expect(Math.abs(scheduleWidths.time - scheduleWidths.day)).toBeLessThanOrEqual(1)
+	await page.getByRole('button', { name: '关闭', exact: true }).click()
+
+	await page.getByRole('button', { name: '实例设置' }).click()
+	await page.getByRole('group', { name: '定时任务模式' }).getByRole('button', { name: '进阶' }).click()
+	await expect(page.locator('.cron-editor')).toHaveCount(2)
+	const mobileCron = page.locator('.cron-editor').first()
+	const modeSelect = mobileCron.locator('.cron-select:not(.cron-select--day) [role="combobox"]')
+	const assertMobileSelectFits = async () => {
+		const popover = page.locator('.select-popover')
+		await expect(popover).toBeVisible()
+		const bounds = await popover.evaluate((menu) => {
+			const rect = menu.getBoundingClientRect()
+			const footer = document.querySelector<HTMLElement>('.instance-settings-modal > footer')
+			const footerTop = footer?.getBoundingClientRect().top ?? window.innerHeight
+			const labelsFit = Array.from(menu.querySelectorAll<HTMLElement>('.select-option__label')).every((label) => label.scrollWidth <= label.clientWidth + 1)
+			const optionsFit = Array.from(menu.querySelectorAll<HTMLElement>('[role="option"]')).every((option) => {
+				const optionRect = option.getBoundingClientRect()
+				return optionRect.top >= rect.top - 1 && optionRect.bottom <= rect.bottom + 1
+			})
+			return { width: rect.width, top: rect.top, bottom: rect.bottom, footerTop, labelsFit, optionsFit, scrollable: menu.scrollHeight > menu.clientHeight + 1 }
+		})
+		expect(bounds.width).toBeGreaterThanOrEqual(160)
+		expect(bounds.width).toBeLessThanOrEqual(180)
+		expect(bounds.top).toBeGreaterThanOrEqual(0)
+		expect(bounds.bottom).toBeLessThanOrEqual(bounds.footerTop)
+		expect(bounds.labelsFit).toBe(true)
+		expect(bounds.optionsFit).toBe(true)
+		expect(bounds.scrollable).toBe(false)
+	}
+	await modeSelect.click()
+	await assertMobileSelectFits()
+	await page.getByRole('option', { name: '每周', exact: true }).click()
+	await mobileCron.locator('.cron-select--day [role="combobox"]').click()
+	await assertMobileSelectFits()
+	await expect(page.getByRole('option', { name: '周日', exact: true })).toBeVisible()
+		await page.screenshot({ path: testInfo.outputPath('cron-advanced-instance-mobile-menu.png') })
+	await page.keyboard.press('Escape')
+		await page.screenshot({ path: testInfo.outputPath('cron-advanced-instance-mobile.png') })
+})
+
 test('top refresh forces every configured instance and reports completion', async ({ page }, testInfo) => {
   const accounts = [
     {
@@ -268,12 +400,12 @@ test('dashboard billing, history precision and settings remain usable', async ({
   await expect(modal).toBeVisible()
   await expect(modal.getByText('抢占式保活')).toBeVisible()
   await expect(modal.getByText('默认停机方式')).toBeVisible()
-  await expect(modal.getByText('每日定时开关机')).toBeVisible()
+	await expect(modal.getByText('定时任务编排')).toBeVisible()
   await expect(modal.getByText('参与日报推送')).toBeVisible()
   // Non-scheduled: daily report time input is visible
   await expect(modal.getByLabel('日报推送时间')).toBeVisible()
   // Enable schedule: daily report time picker is hidden, shutdown timing is explained
-  await modal.locator('.toggle-row:has-text("每日定时开关机")').click()
+	await modal.getByRole('checkbox').check()
   await expect(modal.getByLabel('日报推送时间')).not.toBeVisible()
   await expect(modal.locator('.report-time-note')).toContainText('每日 23:30 关机时')
   await page.screenshot({ path: testInfo.outputPath('scheduled-report-note-desktop.png') })
@@ -467,7 +599,7 @@ test('time picker works in desktop settings and mobile schedule', async ({ page 
   await page.setViewportSize({ width: 390, height: 844 })
   await editor.locator('.report-time-note').scrollIntoViewIfNeeded()
   await page.screenshot({ path: testInfo.outputPath('daily-report-note-mobile.png') })
-  await editor.locator('.toggle-row:has-text("每日定时开关机")').click()
+	await editor.getByRole('checkbox').check()
   const shutdown = editor.getByRole('button', { name: '关机时间' })
   await shutdown.click()
   picker = page.getByRole('dialog', { name: '关机时间，选择时间' })

@@ -90,3 +90,24 @@
 }
 
 @keyframes time-picker-sheet-enter { from { opacity: .8; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+
+.time-picker__trigger { background: var(--input); color: var(--ink); box-shadow: var(--input-shadow); }
+.time-picker__trigger:hover { background: var(--input-hover); }
+.time-picker__trigger.is-open { background: var(--input-focus); box-shadow: var(--focus-shadow); }
+.time-picker__panel { background: var(--popover); color: var(--ink); box-shadow: var(--shadow-popover); }
+.time-picker__close:hover { background: var(--hover); color: var(--ink); }
+.time-picker__selection { background: var(--blue-soft); }
+.time-picker__selection > span { color: var(--info-ink); }
+.time-picker__selection small { color: var(--muted); }
+.time-picker__selection output { color: var(--blue); }
+.time-picker__selection output em { color: var(--muted); }
+.time-picker__options { background: var(--time-options); scrollbar-color: var(--scroll-thumb) transparent; }
+.time-picker__options::-webkit-scrollbar-thumb { background: var(--scroll-thumb); background-clip: padding-box; }
+.time-picker__option { color: var(--ink); }
+.time-picker__option:hover { background: var(--hover); }
+.time-picker__option.is-selected { background: var(--time-selected); color: var(--time-selected-ink); }
+.time-picker__handle { background: var(--scroll-thumb); }
+.time-picker__cancel { background: var(--surface-muted); color: var(--muted); }
+.time-picker__cancel:hover { background: var(--hover); }
+.time-picker__confirm { background: var(--time-accent-bg); color: var(--time-accent-ink); }
+.time-picker__confirm:hover { background: var(--time-accent-hover); }

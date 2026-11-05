@@ -288,12 +288,14 @@ func nullBoolInt(value *bool) any {
 }
 
 func saveAccountsTx(ctx context.Context, tx *sql.Tx, s *Store, accounts []domain.Account) error {
-	activeRows, err := tx.QueryContext(ctx, `SELECT id, access_key_id, region_id, instance_id, access_key_secret FROM accounts WHERE deleted_at=0`)
+	activeRows, err := tx.QueryContext(ctx, `SELECT id, access_key_id, region_id, instance_id, public_ip, public_ipv6, ip_updated_at, access_key_secret FROM accounts WHERE deleted_at=0`)
 	if err != nil {
 		return err
 	}
 	type existing struct {
-		id, key, region, instance, secret string
+		id, key, region, instance, publicIP, publicIPv6 string
+		ipUpdatedAt                                     int64
+		secret                                          string
 	}
 	byID := map[int64]existing{}
 	byComposite := map[string]existing{}
@@ -301,7 +303,7 @@ func saveAccountsTx(ctx context.Context, tx *sql.Tx, s *Store, accounts []domain
 	for activeRows.Next() {
 		var id int64
 		var row existing
-		if err = activeRows.Scan(&id, &row.key, &row.region, &row.instance, &row.secret); err != nil {
+		if err = activeRows.Scan(&id, &row.key, &row.region, &row.instance, &row.publicIP, &row.publicIPv6, &row.ipUpdatedAt, &row.secret); err != nil {
 			activeRows.Close()
 			return err
 		}
@@ -370,15 +372,25 @@ func saveAccountsTx(ctx context.Context, tx *sql.Tx, s *Store, accounts []domain
 		}
 		if found {
 			id, _ := strconv.ParseInt(row.id, 10, 64)
-			_, err = tx.ExecContext(ctx, `UPDATE accounts SET access_key_id=?, access_key_secret=?, region_id=?, instance_id=?, max_traffic=?, schedule_enabled=?, start_time=?, stop_time=?, remark=?, site_type=?, keep_alive=?, shutdown_mode=?, daily_report=?, daily_report_time=?, deleted_at=0 WHERE id=?`,
-				account.AccessKeyID, encryptedSecret, account.RegionID, account.InstanceID, account.MaxTraffic, boolInt(account.ScheduleEnabled), account.StartTime, account.StopTime, account.Remark, siteType, nullBoolInt(account.KeepAlive), account.ShutdownMode, nullBoolInt(account.DailyReport), dailyReportTime, id)
+			publicIP, publicIPv6, ipUpdatedAt := row.publicIP, row.publicIPv6, row.ipUpdatedAt
+			if row.region != account.RegionID || row.instance != account.InstanceID {
+				publicIP, publicIPv6, ipUpdatedAt = "", "", 0
+			} else if !account.PublicIPUpdatedAt.IsZero() {
+				publicIP, publicIPv6, ipUpdatedAt = account.PublicIP, account.PublicIPv6, account.PublicIPUpdatedAt.Unix()
+			}
+			_, err = tx.ExecContext(ctx, `UPDATE accounts SET access_key_id=?, access_key_secret=?, region_id=?, instance_id=?, public_ip=?, public_ipv6=?, ip_updated_at=?, max_traffic=?, schedule_enabled=?, schedule_mode=?, start_time=?, stop_time=?, remark=?, site_type=?, keep_alive=?, shutdown_mode=?, daily_report=?, daily_report_time=?, start_cron=?, stop_cron=?, deleted_at=0 WHERE id=?`,
+				account.AccessKeyID, encryptedSecret, account.RegionID, account.InstanceID, publicIP, publicIPv6, ipUpdatedAt, account.MaxTraffic, boolInt(account.ScheduleEnabled), scheduleMode(account), account.StartTime, account.StopTime, account.Remark, siteType, nullBoolInt(account.KeepAlive), account.ShutdownMode, nullBoolInt(account.DailyReport), dailyReportTime, account.StartCron, account.StopCron, id)
 			if err != nil {
 				return err
 			}
 			kept[id] = true
 		} else {
-			result, err := tx.ExecContext(ctx, `INSERT INTO accounts(access_key_id,access_key_secret,region_id,instance_id,max_traffic,schedule_enabled,start_time,stop_time,remark,site_type,instance_status,keep_alive,shutdown_mode,daily_report,daily_report_time) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-				account.AccessKeyID, encryptedSecret, account.RegionID, account.InstanceID, account.MaxTraffic, boolInt(account.ScheduleEnabled), account.StartTime, account.StopTime, account.Remark, siteType, domain.StatusUnknown, nullBoolInt(account.KeepAlive), account.ShutdownMode, nullBoolInt(account.DailyReport), dailyReportTime)
+			ipUpdatedAt := int64(0)
+			if !account.PublicIPUpdatedAt.IsZero() {
+				ipUpdatedAt = account.PublicIPUpdatedAt.Unix()
+			}
+			result, err := tx.ExecContext(ctx, `INSERT INTO accounts(access_key_id,access_key_secret,region_id,instance_id,public_ip,public_ipv6,ip_updated_at,max_traffic,schedule_enabled,schedule_mode,start_time,stop_time,remark,site_type,instance_status,keep_alive,shutdown_mode,daily_report,daily_report_time,start_cron,stop_cron) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+				account.AccessKeyID, encryptedSecret, account.RegionID, account.InstanceID, account.PublicIP, account.PublicIPv6, ipUpdatedAt, account.MaxTraffic, boolInt(account.ScheduleEnabled), scheduleMode(account), account.StartTime, account.StopTime, account.Remark, siteType, domain.StatusUnknown, nullBoolInt(account.KeepAlive), account.ShutdownMode, nullBoolInt(account.DailyReport), dailyReportTime, account.StartCron, account.StopCron)
 			if err != nil {
 				return err
 			}
@@ -403,6 +415,16 @@ func saveAccountsTx(ctx context.Context, tx *sql.Tx, s *Store, accounts []domain
 	return nil
 }
 
+func scheduleMode(account domain.Account) string {
+	if account.ScheduleMode == "advanced" || account.ScheduleMode == "simple" {
+		return account.ScheduleMode
+	}
+	if account.StartCron != "" || account.StopCron != "" {
+		return "advanced"
+	}
+	return "simple"
+}
+
 func boolInt(value bool) int {
 	if value {
 		return 1
@@ -411,7 +433,7 @@ func boolInt(value bool) int {
 }
 
 func (s *Store) ListAccounts(ctx context.Context) ([]domain.Account, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id,access_key_id,access_key_secret,region_id,instance_id,max_traffic,schedule_enabled,start_time,stop_time,traffic_used,instance_status,updated_at,last_keep_alive_at,remark,site_type,keep_alive,shutdown_mode,daily_report,daily_report_time FROM accounts WHERE deleted_at=0 ORDER BY id`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,access_key_id,access_key_secret,region_id,instance_id,public_ip,public_ipv6,ip_updated_at,max_traffic,schedule_enabled,schedule_mode,start_time,stop_time,traffic_used,instance_status,updated_at,last_keep_alive_at,remark,site_type,keep_alive,shutdown_mode,daily_report,daily_report_time,start_cron,stop_cron FROM accounts WHERE deleted_at=0 ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -420,10 +442,10 @@ func (s *Store) ListAccounts(ctx context.Context) ([]domain.Account, error) {
 	for rows.Next() {
 		var a domain.Account
 		var secret string
-		var schedule, updated, keepAlive int64
+		var schedule, updated, lastKeepAlive, ipUpdatedAt int64
 		var keepAliveCol, dailyReportCol sql.NullInt64
 		var shutdownModeCol, dailyReportTimeCol sql.NullString
-		if err = rows.Scan(&a.ID, &a.AccessKeyID, &secret, &a.RegionID, &a.InstanceID, &a.MaxTraffic, &schedule, &a.StartTime, &a.StopTime, &a.TrafficUsed, &a.InstanceStatus, &updated, &keepAlive, &a.Remark, &a.SiteType, &keepAliveCol, &shutdownModeCol, &dailyReportCol, &dailyReportTimeCol); err != nil {
+		if err = rows.Scan(&a.ID, &a.AccessKeyID, &secret, &a.RegionID, &a.InstanceID, &a.PublicIP, &a.PublicIPv6, &ipUpdatedAt, &a.MaxTraffic, &schedule, &a.ScheduleMode, &a.StartTime, &a.StopTime, &a.TrafficUsed, &a.InstanceStatus, &updated, &lastKeepAlive, &a.Remark, &a.SiteType, &keepAliveCol, &shutdownModeCol, &dailyReportCol, &dailyReportTimeCol, &a.StartCron, &a.StopCron); err != nil {
 			return nil, err
 		}
 		secret, err = s.Decrypt(secret)
@@ -432,11 +454,20 @@ func (s *Store) ListAccounts(ctx context.Context) ([]domain.Account, error) {
 		}
 		a.SecretConfigured = secret != ""
 		a.ScheduleEnabled = schedule == 1
+		if a.ScheduleMode == "" {
+			a.ScheduleMode = "simple"
+			if a.StartCron != "" || a.StopCron != "" {
+				a.ScheduleMode = "advanced"
+			}
+		}
 		if updated > 0 {
 			a.UpdatedAt = time.Unix(updated, 0).UTC()
 		}
-		if keepAlive > 0 {
-			a.LastKeepAliveAt = time.Unix(keepAlive, 0).UTC()
+		if ipUpdatedAt > 0 {
+			a.PublicIPUpdatedAt = time.Unix(ipUpdatedAt, 0).UTC()
+		}
+		if lastKeepAlive > 0 {
+			a.LastKeepAliveAt = time.Unix(lastKeepAlive, 0).UTC()
 		}
 		if keepAliveCol.Valid {
 			v := keepAliveCol.Int64 == 1
@@ -458,11 +489,27 @@ func (s *Store) ListAccounts(ctx context.Context) ([]domain.Account, error) {
 }
 
 func (s *Store) UpdateAccountSettings(ctx context.Context, id int64, keepAlive *bool, shutdownMode string, scheduleEnabled bool, startTime, stopTime string, dailyReport *bool, dailyReportTime string) error {
+	return s.UpdateAccountSettingsWithCron(ctx, id, keepAlive, shutdownMode, scheduleEnabled, startTime, stopTime, dailyReport, dailyReportTime, "", "", false)
+}
+
+func (s *Store) UpdateAccountSettingsWithCron(ctx context.Context, id int64, keepAlive *bool, shutdownMode string, scheduleEnabled bool, startTime, stopTime string, dailyReport *bool, dailyReportTime, startCron, stopCron string, replaceCron bool) error {
+	mode := scheduleMode(domain.Account{StartCron: startCron, StopCron: stopCron})
+	return s.UpdateAccountSettingsWithScheduleMode(ctx, id, keepAlive, shutdownMode, scheduleEnabled, mode, startTime, stopTime, dailyReport, dailyReportTime, startCron, stopCron, replaceCron)
+}
+
+func (s *Store) UpdateAccountSettingsWithScheduleMode(ctx context.Context, id int64, keepAlive *bool, shutdownMode string, scheduleEnabled bool, mode, startTime, stopTime string, dailyReport *bool, dailyReportTime, startCron, stopCron string, replaceCron bool) error {
 	if dailyReportTime == "" {
 		dailyReportTime = "00:00"
 	}
-	_, err := s.db.ExecContext(ctx, `UPDATE accounts SET keep_alive=?, shutdown_mode=?, schedule_enabled=?, start_time=?, stop_time=?, daily_report=?, daily_report_time=? WHERE id=? AND deleted_at=0`,
-		nullBoolInt(keepAlive), shutdownMode, boolInt(scheduleEnabled), startTime, stopTime, nullBoolInt(dailyReport), dailyReportTime, id)
+	query := `UPDATE accounts SET keep_alive=?, shutdown_mode=?, schedule_enabled=?, schedule_mode=?, start_time=?, stop_time=?, daily_report=?, daily_report_time=?`
+	args := []any{nullBoolInt(keepAlive), shutdownMode, boolInt(scheduleEnabled), mode, startTime, stopTime, nullBoolInt(dailyReport), dailyReportTime}
+	if replaceCron {
+		query += `, start_cron=?, stop_cron=?`
+		args = append(args, startCron, stopCron)
+	}
+	query += ` WHERE id=? AND deleted_at=0`
+	args = append(args, id)
+	_, err := s.db.ExecContext(ctx, query, args...)
 	return err
 }
 
@@ -495,6 +542,15 @@ func (s *Store) updateRuntime(ctx context.Context, id int64, traffic float64, st
 
 func (s *Store) UpdateRuntime(ctx context.Context, id int64, traffic float64, status string, updatedAt time.Time) error {
 	return s.updateRuntime(ctx, id, traffic, status, updatedAt)
+}
+
+func (s *Store) UpdateRuntimeWithIP(ctx context.Context, id int64, traffic float64, status, publicIP string, ipUpdatedAt, updatedAt time.Time) error {
+	return s.UpdateRuntimeWithIPs(ctx, id, traffic, status, publicIP, "", ipUpdatedAt, updatedAt)
+}
+
+func (s *Store) UpdateRuntimeWithIPs(ctx context.Context, id int64, traffic float64, status, publicIP, publicIPv6 string, ipUpdatedAt, updatedAt time.Time) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE accounts SET traffic_used=?,instance_status=?,updated_at=?,public_ip=?,public_ipv6=?,ip_updated_at=? WHERE id=? AND deleted_at=0`, traffic, status, updatedAt.Unix(), publicIP, publicIPv6, ipUpdatedAt.Unix(), id)
+	return err
 }
 
 func (s *Store) UpdateKeepAliveAt(ctx context.Context, id int64, at time.Time) error {

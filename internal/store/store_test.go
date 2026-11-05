@@ -81,6 +81,73 @@ func TestAccountIDsRemainStable(t *testing.T) {
 	}
 }
 
+func TestRuntimePublicIPPersistsAndClearsWhenInstanceChanges(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	config := domain.Config{AdminPassword: "Strong-Password-42!", TrafficThreshold: 95, ShutdownMode: "KeepCharging", ThresholdAction: "stop_and_notify", APIInterval: 600, Timezone: "Asia/Shanghai", Accounts: []domain.Account{{AccessKeyID: "LTAItest", AccessKeySecret: "secret", RegionID: "cn-hongkong", InstanceID: "i-test", MaxTraffic: 200, SiteType: "china"}}}
+	if err = st.Setup(ctx, config); err != nil {
+		t.Fatal(err)
+	}
+	accounts, err := st.ListAccounts(ctx)
+	if err != nil || len(accounts) != 1 {
+		t.Fatalf("accounts=%v err=%v", accounts, err)
+	}
+	updated := time.Date(2026, time.October, 30, 10, 0, 0, 0, time.UTC)
+	if err = st.UpdateRuntimeWithIPs(ctx, accounts[0].ID, 1.5, domain.StatusRunning, "203.0.113.7", "2001:db8::7", updated, updated); err != nil {
+		t.Fatal(err)
+	}
+	config.AdminPassword = ""
+	config.Accounts[0].ID = accounts[0].ID
+	config.Accounts[0].AccessKeySecret = ""
+	if err = st.SaveConfig(ctx, config); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := st.GetAccount(ctx, accounts[0].ID)
+	if err != nil || loaded.PublicIP != "203.0.113.7" || loaded.PublicIPv6 != "2001:db8::7" || loaded.StartCron != "" {
+		t.Fatalf("preserved runtime=%+v err=%v", loaded, err)
+	}
+	config.Accounts[0].InstanceID = "i-new"
+	if err = st.SaveConfig(ctx, config); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = st.GetAccount(ctx, accounts[0].ID)
+	if err != nil || loaded.PublicIP != "" || loaded.PublicIPv6 != "" || !loaded.PublicIPUpdatedAt.IsZero() {
+		t.Fatalf("stale public IP was not cleared: %+v err=%v", loaded, err)
+	}
+}
+
+func TestCronSettingsPersist(t *testing.T) {
+	st, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	ctx := context.Background()
+	config := domain.Config{AdminPassword: "Strong-Password-42!", TrafficThreshold: 95, ShutdownMode: "KeepCharging", ThresholdAction: "stop_and_notify", APIInterval: 600, Timezone: "Asia/Shanghai", Accounts: []domain.Account{{AccessKeyID: "LTAItest", AccessKeySecret: "secret", RegionID: "cn-hongkong", InstanceID: "i-test", MaxTraffic: 200, SiteType: "china"}}}
+	if err = st.Setup(ctx, config); err != nil {
+		t.Fatal(err)
+	}
+	accounts, _ := st.ListAccounts(ctx)
+	if err = st.UpdateAccountSettingsWithCron(ctx, accounts[0].ID, nil, "", false, "", "", nil, "00:00", "0 0 1 * *", "0 0 15 * *", true); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := st.GetAccount(ctx, accounts[0].ID)
+	if err != nil || loaded.StartCron != "0 0 1 * *" || loaded.StopCron != "0 0 15 * *" || loaded.ScheduleMode != "advanced" {
+		t.Fatalf("cron settings=%+v err=%v", loaded, err)
+	}
+	if err = st.UpdateAccountSettingsWithScheduleMode(ctx, accounts[0].ID, nil, "", true, "simple", "08:00", "23:30", nil, "00:00", loaded.StartCron, loaded.StopCron, true); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = st.GetAccount(ctx, accounts[0].ID)
+	if err != nil || loaded.ScheduleMode != "simple" || loaded.StartCron == "" {
+		t.Fatalf("daily mode should preserve advanced expressions for later: account=%+v err=%v", loaded, err)
+	}
+}
+
 func TestAPIIntervalMinimum(t *testing.T) {
 	st, err := Open(t.TempDir())
 	if err != nil {

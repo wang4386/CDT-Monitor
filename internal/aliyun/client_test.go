@@ -135,3 +135,72 @@ func TestGetInstanceStatusRetriesTransientTimestampErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestGetInstanceDetailsPrefersEIPAndParsesInstanceIDs(t *testing.T) {
+	client := NewClient()
+	client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if err := request.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		if request.PostForm.Get("Action") != "DescribeInstances" || request.PostForm.Get("InstanceIds") != `["i-test"]` || request.PostForm.Get("RegionId") != "cn-hongkong" {
+			t.Fatalf("unexpected request parameters: %v", request.PostForm)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"Instances":{"Instance":[{"Status":"Running","EipAddress":{"IpAddress":"198.51.100.3"},"PublicIpAddress":{"IpAddress":["203.0.113.4"]},"Ipv6Address":{"Ipv6Address":["2001:db8::3"]}}]}}`)),
+			Header:     make(http.Header),
+			Request:    request,
+		}, nil
+	})
+
+	details, err := client.GetInstanceDetails(context.Background(), domain.Account{AccessKeyID: "LTAItest", RegionID: "cn-hongkong", InstanceID: "i-test"}, "secret")
+	if err != nil || details.Status != "Running" || details.PublicIP != "198.51.100.3" || details.PublicIPv6 != "2001:db8::3" {
+		t.Fatalf("details=%#v err=%v", details, err)
+	}
+}
+
+func TestGetInstanceDetailsFallsBackToAssignedPublicIP(t *testing.T) {
+	client := NewClient()
+	client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"Instances":{"Instance":{"Status":"Stopped","PublicIpAddress":{"IpAddress":["203.0.113.9"]}}}}`)),
+			Header:     make(http.Header),
+			Request:    request,
+		}, nil
+	})
+
+	details, err := client.GetInstanceDetails(context.Background(), domain.Account{AccessKeyID: "LTAItest", RegionID: "cn-hongkong", InstanceID: "i-test"}, "secret")
+	if err != nil || details.Status != "Stopped" || details.PublicIP != "203.0.113.9" {
+		t.Fatalf("details=%#v err=%v", details, err)
+	}
+}
+
+func TestGetInstanceDetailsOmitsMissingIPv6(t *testing.T) {
+	client := NewClient()
+	client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"Instances":{"Instance":{"Status":"Running","PublicIpAddress":{"IpAddress":"203.0.113.12"}}}}`)), Header: make(http.Header), Request: request}, nil
+	})
+
+	details, err := client.GetInstanceDetails(context.Background(), domain.Account{AccessKeyID: "LTAItest", RegionID: "cn-hongkong", InstanceID: "i-test"}, "secret")
+	if err != nil || details.PublicIP != "203.0.113.12" || details.PublicIPv6 != "" {
+		t.Fatalf("details=%#v err=%v", details, err)
+	}
+}
+
+func TestGetInstanceDetailsParsesIPv6FromNetworkInterfaceSets(t *testing.T) {
+	client := NewClient()
+	client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"Instances":{"Instance":[{"Status":"Running","PublicIpAddress":{"IpAddress":["203.0.113.13"]},"NetworkInterface":[{"Ipv6Sets":{"Ipv6Set":[{"Ipv6Address":"2001:db8::13","Primary":true}]}}]}]}}`)),
+			Header:     make(http.Header),
+			Request:    request,
+		}, nil
+	})
+
+	details, err := client.GetInstanceDetails(context.Background(), domain.Account{AccessKeyID: "LTAItest", RegionID: "cn-hongkong", InstanceID: "i-test"}, "secret")
+	if err != nil || details.PublicIP != "203.0.113.13" || details.PublicIPv6 != "2001:db8::13" {
+		t.Fatalf("details=%#v err=%v", details, err)
+	}
+}

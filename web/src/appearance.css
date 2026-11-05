@@ -1,0 +1,53 @@
+/* The theme chooser is intentionally compact so it reads as a utility menu, not a second settings panel. */
+.setup-header-actions { display: flex; align-items: center; gap: 18px; }
+.auth-appearance { position: fixed; top: 24px; right: 24px; z-index: 40; }
+.theme-menu { position: relative; z-index: 140; }
+.theme-menu__popover {
+  position: absolute;
+  z-index: 200;
+  top: calc(100% + 12px);
+  right: -6px;
+  width: 228px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 17px;
+  background: var(--popover);
+  box-shadow: 0 24px 54px -26px rgba(20, 27, 38, .42), 0 0 0 1px rgba(255, 255, 255, .18), inset 0 1px 0 var(--inner-line);
+  animation: menu-in .2s var(--ease-out) both;
+}
+.theme-menu__heading { display: flex; align-items: baseline; justify-content: space-between; padding: 3px 8px 9px; color: var(--ink); }
+.theme-menu__heading span { font-size: 12px; font-weight: 800; letter-spacing: .01em; }
+.theme-menu__heading small { color: var(--muted-soft); font-size: 10px; font-weight: 650; }
+.theme-menu__options { display: grid; gap: 4px; }
+.theme-menu__popover button {
+  width: 100%;
+  min-height: 54px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 7px 9px;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 9px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast) ease, border-color var(--duration-fast) ease, transform var(--duration-fast) var(--ease-out);
+}
+.theme-menu__popover button:hover { background: var(--hover); border-color: var(--line); transform: translateY(-1px); }
+.theme-menu__popover button[aria-checked="true"] { background: var(--blue-soft); border-color: var(--blue); }
+.theme-menu__popover button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.theme-menu__icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: var(--surface-muted); color: var(--muted); }
+.theme-menu__popover button[aria-checked="true"] .theme-menu__icon { color: var(--blue); background: var(--surface-raised); }
+.theme-menu__icon svg { width: 16px; height: 16px; }
+.theme-menu__copy { min-width: 0; display: grid; gap: 2px; }
+.theme-menu__copy b { font-size: 12px; line-height: 1.2; }
+.theme-menu__copy small { overflow: hidden; color: var(--muted); font-size: 10px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.theme-menu__check { width: 16px; height: 16px; color: var(--blue); }
+
+@media (max-width: 640px) {
+  .setup-header-actions { gap: 10px; }
+  .auth-appearance { top: 14px; right: 14px; }
+  .topbar-actions .theme-menu__popover { right: -112px; }
+}

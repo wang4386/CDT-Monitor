@@ -26,9 +26,16 @@ import (
 type Provider interface {
 	GetTraffic(ctx context.Context, account domain.Account, secret string) (float64, error)
 	GetInstanceStatus(ctx context.Context, account domain.Account, secret string) (string, error)
+	GetInstanceDetails(ctx context.Context, account domain.Account, secret string) (InstanceDetails, error)
 	ControlInstance(ctx context.Context, account domain.Account, secret, action, shutdownMode string) error
 	GetAccountBalance(ctx context.Context, account domain.Account, secret string) (BillingBalance, error)
 	GetInstanceBill(ctx context.Context, account domain.Account, secret, cycle string) (BillingBill, error)
+}
+
+type InstanceDetails struct {
+	Status     string
+	PublicIP   string
+	PublicIPv6 string
 }
 
 type BillingBalance struct {
@@ -116,6 +123,48 @@ func (c *Client) GetInstanceStatus(ctx context.Context, account domain.Account, 
 		return domain.StatusUnknown, nil
 	}
 	return status, nil
+}
+
+func (c *Client) GetInstanceDetails(ctx context.Context, account domain.Account, secret string) (InstanceDetails, error) {
+	if account.InstanceID == "" {
+		return InstanceDetails{}, errors.New("instance_id is required")
+	}
+	instanceIDs, err := json.Marshal([]string{account.InstanceID})
+	if err != nil {
+		return InstanceDetails{}, err
+	}
+	params := map[string]string{"RegionId": account.RegionID, "InstanceIds": string(instanceIDs)}
+	result, err := c.call(ctx, account.AccessKeyID, secret, account.RegionID, "ecs."+account.RegionID+".aliyuncs.com", "2014-05-26", "DescribeInstances", params)
+	if err != nil {
+		return InstanceDetails{}, err
+	}
+	instances := nestedSlice(result, "Instances", "Instance")
+	if len(instances) == 0 {
+		if container, ok := result["Instances"].(map[string]any); ok {
+			if instance, ok := container["Instance"].(map[string]any); ok {
+				instances = []any{instance}
+			}
+		}
+	}
+	if len(instances) == 0 {
+		return InstanceDetails{}, fmt.Errorf("aliyun DescribeInstances returned no instance %q", account.InstanceID)
+	}
+	instance, ok := instances[0].(map[string]any)
+	if !ok {
+		return InstanceDetails{}, errors.New("aliyun DescribeInstances returned an invalid instance")
+	}
+	publicIP := firstAddress(instance["EipAddress"])
+	if publicIP == "" {
+		publicIP = firstAddress(instance["PublicIpAddress"])
+	}
+	publicIPv6 := firstAddress(instance["Ipv6Address"])
+	if publicIPv6 == "" {
+		publicIPv6 = firstAddress(instance["Ipv6Addresses"])
+	}
+	if publicIPv6 == "" {
+		publicIPv6 = firstNetworkInterfaceIPv6(instance)
+	}
+	return InstanceDetails{Status: stringValue(instance["Status"]), PublicIP: publicIP, PublicIPv6: publicIPv6}, nil
 }
 
 func (c *Client) ControlInstance(ctx context.Context, account domain.Account, secret, action, shutdownMode string) error {
@@ -364,6 +413,43 @@ func nestedSlice(value map[string]any, parents ...string) []any {
 		current = obj[key]
 	}
 	return asSlice(current)
+}
+
+func firstAddress(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case []any:
+		for _, item := range typed {
+			if address := firstAddress(item); address != "" {
+				return address
+			}
+		}
+	case map[string]any:
+		for _, key := range []string{"IpAddress", "Ipv6Address", "Address"} {
+			if address := firstAddress(typed[key]); address != "" {
+				return address
+			}
+		}
+	}
+	return ""
+}
+
+func firstNetworkInterfaceIPv6(instance map[string]any) string {
+	paths := [][]string{{"NetworkInterface"}, {"NetworkInterfaces", "NetworkInterface"}}
+	for _, path := range paths {
+		interfaces := nestedSlice(instance, path...)
+		for _, item := range interfaces {
+			interfaceObject, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			if address := firstAddress(nestedSlice(interfaceObject, "Ipv6Sets", "Ipv6Set")); address != "" {
+				return address
+			}
+		}
+	}
+	return ""
 }
 
 func asSlice(value any) []any {
