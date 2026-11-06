@@ -210,12 +210,7 @@ func (e *Engine) runJob(ctx context.Context, job domain.Job) (string, error) {
 		if err := json.Unmarshal([]byte(job.Payload), &payload); err != nil {
 			return "", err
 		}
-		config, err := e.store.GetConfig(ctx)
-		if err != nil {
-			return "", err
-		}
-		event := newEvent("test", "通知通道测试", "CDT Monitor 的通知配置工作正常。", 0, map[string]string{"发送时间": time.Now().Format("2006-01-02 15:04:05")})
-		return "notification sent", e.notify.Send(ctx, payload.Channel, event, config)
+		return "notification sent", e.SendTestNotification(ctx, payload.Channel, nil)
 	case JobDailyReport:
 		var payload struct {
 			Force      bool    `json:"force"`
@@ -231,6 +226,53 @@ func (e *Engine) runJob(ctx context.Context, job domain.Job) (string, error) {
 	default:
 		return "", fmt.Errorf("unknown job type %q", job.Type)
 	}
+}
+
+// SendTestNotification uses optional unsaved notification settings without persisting them.
+func (e *Engine) SendTestNotification(ctx context.Context, channel string, preview *domain.NotificationConfig) error {
+	config, err := e.store.GetConfig(ctx)
+	if err != nil {
+		return err
+	}
+	if preview != nil {
+		config = applyNotificationPreview(config, channel, *preview)
+	}
+	event := newEvent("test", "通知通道测试", "CDT Monitor 的通知配置工作正常。", 0, map[string]string{"发送时间": time.Now().Format("2006-01-02 15:04:05")})
+	return e.notify.Send(ctx, channel, event, config)
+}
+
+// SendDailyReportPreview builds the normal report but uses the current unsaved
+// notification settings for test delivery only.
+func (e *Engine) SendDailyReportPreview(ctx context.Context, accountID int64, notifications domain.NotificationConfig) (string, error) {
+	return e.generateAndSendDailyReportSelected(ctx, true, accountID, nil, "", "", &notifications)
+}
+
+// Empty secret fields mean "keep the stored credential", consistent with SaveConfig.
+func applyNotificationPreview(current domain.Config, channel string, preview domain.NotificationConfig) domain.Config {
+	switch channel {
+	case "email":
+		if preview.Email.Password == "" {
+			preview.Email.Password = current.Notifications.Email.Password
+		}
+		current.Notifications.Email = preview.Email
+	case "telegram":
+		if preview.Telegram.Token == "" {
+			preview.Telegram.Token = current.Notifications.Telegram.Token
+		}
+		if preview.Telegram.ProxyPass == "" {
+			preview.Telegram.ProxyPass = current.Notifications.Telegram.ProxyPass
+		}
+		current.Notifications.Telegram = preview.Telegram
+	case "webhook":
+		if preview.Webhook.Headers == "" {
+			preview.Webhook.Headers = current.Notifications.Webhook.Headers
+		}
+		if preview.Webhook.Secret == "" {
+			preview.Webhook.Secret = current.Notifications.Webhook.Secret
+		}
+		current.Notifications.Webhook = preview.Webhook
+	}
+	return current
 }
 
 func (e *Engine) processAccount(ctx context.Context, accountID int64, force bool) (string, error) {
@@ -1142,10 +1184,16 @@ func (e *Engine) generateAndSendDailyReportForAccounts(ctx context.Context, acco
 	return e.generateAndSendDailyReportSelected(ctx, false, 0, accountIDs, reportDate, jobID)
 }
 
-func (e *Engine) generateAndSendDailyReportSelected(ctx context.Context, force bool, targetID int64, accountIDs []int64, reportDate, jobID string) (string, error) {
+func (e *Engine) generateAndSendDailyReportSelected(ctx context.Context, force bool, targetID int64, accountIDs []int64, reportDate, jobID string, notificationPreview ...*domain.NotificationConfig) (string, error) {
 	config, err := e.store.GetConfig(ctx)
 	if err != nil {
 		return "", err
+	}
+	preview := len(notificationPreview) > 0 && notificationPreview[0] != nil
+	if preview {
+		for _, channel := range []string{"email", "telegram", "webhook"} {
+			config = applyNotificationPreview(config, channel, *notificationPreview[0])
+		}
 	}
 	if !force && !config.EnableDailyReport {
 		return "daily report disabled", nil
@@ -1276,7 +1324,7 @@ func (e *Engine) generateAndSendDailyReportSelected(ctx context.Context, force b
 			_ = e.store.AddLog(ctx, "info", msg)
 			return msg, nil
 		}
-		if err = e.store.AddOutbox(ctx, event, channels); err != nil {
+		if err = e.deliverDailyReport(ctx, config, event, channels, preview); err != nil {
 			return "", err
 		}
 		msg := fmt.Sprintf("实例 [%s] 流量与账单日报已发送 (消耗: %s)", instName, formatTrafficGB(consumed))
@@ -1499,10 +1547,22 @@ func (e *Engine) generateAndSendDailyReportSelected(ctx context.Context, force b
 		_ = e.store.AddLog(ctx, "info", msg)
 		return msg, nil
 	}
-	if err = e.store.AddOutbox(ctx, event, channels); err != nil {
+	if err = e.deliverDailyReport(ctx, config, event, channels, preview); err != nil {
 		return "", err
 	}
 	msg := fmt.Sprintf("每日流量与账单日报已发送 (纳入 %d 台实例，消耗总和: %s)", len(items), formatTrafficGB(totalConsumed))
 	_ = e.store.AddLog(ctx, "info", msg)
 	return msg, nil
+}
+
+func (e *Engine) deliverDailyReport(ctx context.Context, config domain.Config, event domain.NotificationEvent, channels []string, preview bool) error {
+	if !preview {
+		return e.store.AddOutbox(ctx, event, channels)
+	}
+	for _, channel := range channels {
+		if err := e.notify.Send(ctx, channel, event, config); err != nil {
+			return fmt.Errorf("daily report test on %s: %w", channel, err)
+		}
+	}
+	return nil
 }

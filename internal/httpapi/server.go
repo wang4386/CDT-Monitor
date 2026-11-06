@@ -692,6 +692,25 @@ func (s *Server) testNotification(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_channel", "invalid notification channel")
 		return
 	}
+	var request struct {
+		Notifications *domain.NotificationConfig `json:"notifications"`
+	}
+	if err := decodeJSON(r, &request); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	if request.Notifications != nil {
+		// Preview credentials stay in request memory, never in the persistent job queue.
+		ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+		defer cancel()
+		if err := s.engine.SendTestNotification(ctx, channel, request.Notifications); err != nil {
+			writeError(w, http.StatusBadRequest, "notification_test_failed", err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"success": true})
+		return
+	}
+	// Maintain the legacy asynchronous endpoint for clients posting an empty body.
 	job, err := s.engine.Enqueue(r.Context(), engine.JobTestNotify, 0, engine.ParseNotifyPayload(channel), "")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "enqueue_failed", err.Error())
@@ -1214,9 +1233,22 @@ func normalizeClockTime(value string, required bool) (string, error) {
 
 func (s *Server) triggerDailyReport(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		AccountID int64 `json:"account_id"`
+		AccountID     int64                      `json:"account_id"`
+		Notifications *domain.NotificationConfig `json:"notifications"`
 	}
 	_ = decodeJSON(r, &body)
+	if body.Notifications != nil {
+		// Send unsaved credentials directly; never store them in jobs or the outbox.
+		ctx, cancel := context.WithTimeout(r.Context(), 28*time.Second)
+		defer cancel()
+		result, err := s.engine.SendDailyReportPreview(ctx, body.AccountID, *body.Notifications)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "daily_report_test_failed", err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"result": result})
+		return
+	}
 	job, err := s.engine.EnqueueDailyReportForAccount(r.Context(), true, body.AccountID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "enqueue_failed", err.Error())
