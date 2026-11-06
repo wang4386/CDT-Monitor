@@ -36,6 +36,8 @@ type InstanceDetails struct {
 	Status     string
 	PublicIP   string
 	PublicIPv6 string
+	// An optional ENI lookup failure must not discard the instance status or IPv4.
+	IPv6Error error
 }
 
 type BillingBalance struct {
@@ -133,7 +135,10 @@ func (c *Client) GetInstanceDetails(ctx context.Context, account domain.Account,
 	if err != nil {
 		return InstanceDetails{}, err
 	}
-	params := map[string]string{"RegionId": account.RegionID, "InstanceIds": string(instanceIDs)}
+	params := map[string]string{
+		"RegionId": account.RegionID, "InstanceIds": string(instanceIDs),
+		"AdditionalAttributes.1": "NETWORK_PRIMARY_ENI_IP",
+	}
 	result, err := c.call(ctx, account.AccessKeyID, secret, account.RegionID, "ecs."+account.RegionID+".aliyuncs.com", "2014-05-26", "DescribeInstances", params)
 	if err != nil {
 		return InstanceDetails{}, err
@@ -164,7 +169,59 @@ func (c *Client) GetInstanceDetails(ctx context.Context, account domain.Account,
 	if publicIPv6 == "" {
 		publicIPv6 = firstNetworkInterfaceIPv6(instance)
 	}
-	return InstanceDetails{Status: stringValue(instance["Status"]), PublicIP: publicIP, PublicIPv6: publicIPv6}, nil
+	details := InstanceDetails{Status: stringValue(instance["Status"]), PublicIP: publicIP, PublicIPv6: publicIPv6}
+	if details.PublicIPv6 == "" {
+		// Bound the whole optional lookup, including retries and pagination.
+		lookupCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		details.PublicIPv6, details.IPv6Error = c.getNetworkInterfaceIPv6(lookupCtx, account, secret)
+		if ctx.Err() != nil {
+			return InstanceDetails{}, ctx.Err()
+		}
+	}
+	return details, nil
+}
+
+func (c *Client) getNetworkInterfaceIPv6(ctx context.Context, account domain.Account, secret string) (string, error) {
+	params := map[string]string{
+		"RegionId": account.RegionID, "InstanceId": account.InstanceID, "MaxResults": "100",
+	}
+	// Omit Type so both primary and secondary ENIs are included.
+	var interfaces []any
+	seenTokens := make(map[string]bool)
+	for {
+		result, err := c.call(ctx, account.AccessKeyID, secret, account.RegionID, "ecs."+account.RegionID+".aliyuncs.com", "2014-05-26", "DescribeNetworkInterfaces", params)
+		if err != nil {
+			return "", err
+		}
+		sets, ok := result["NetworkInterfaceSets"].(map[string]any)
+		if !ok {
+			return "", errors.New("aliyun DescribeNetworkInterfaces missing NetworkInterfaceSets")
+		}
+		page, ok := sets["NetworkInterfaceSet"].([]any)
+		if !ok {
+			return "", errors.New("aliyun DescribeNetworkInterfaces invalid NetworkInterfaceSet")
+		}
+		for _, item := range page {
+			nic, ok := item.(map[string]any)
+			if !ok {
+				return "", errors.New("aliyun DescribeNetworkInterfaces returned an invalid interface")
+			}
+			if id := stringValue(nic["InstanceId"]); id != "" && id != account.InstanceID {
+				continue
+			}
+			interfaces = append(interfaces, nic)
+		}
+		token := stringValue(result["NextToken"])
+		if token == "" {
+			return firstInterfaceIPv6(interfaces), nil
+		}
+		if seenTokens[token] {
+			return "", errors.New("aliyun DescribeNetworkInterfaces repeated NextToken")
+		}
+		seenTokens[token] = true
+		params["NextToken"] = token
+	}
 }
 
 func (c *Client) ControlInstance(ctx context.Context, account domain.Account, secret, action, shutdownMode string) error {
@@ -437,14 +494,31 @@ func firstAddress(value any) string {
 
 func firstNetworkInterfaceIPv6(instance map[string]any) string {
 	paths := [][]string{{"NetworkInterface"}, {"NetworkInterfaces", "NetworkInterface"}}
+	var interfaces []any
 	for _, path := range paths {
-		interfaces := nestedSlice(instance, path...)
+		interfaces = append(interfaces, nestedSlice(instance, path...)...)
+	}
+	return firstInterfaceIPv6(interfaces)
+}
+
+func firstInterfaceIPv6(interfaces []any) string {
+	// Prefer the primary ENI even when it appears after a secondary ENI/page.
+	for _, primary := range []bool{true, false} {
 		for _, item := range interfaces {
 			interfaceObject, ok := item.(map[string]any)
-			if !ok {
+			if !ok || (stringValue(interfaceObject["Type"]) == "Primary") != primary {
 				continue
 			}
-			if address := firstAddress(nestedSlice(interfaceObject, "Ipv6Sets", "Ipv6Set")); address != "" {
+			addresses := nestedSlice(interfaceObject, "Ipv6Sets", "Ipv6Set")
+			for _, entry := range addresses {
+				address, ok := entry.(map[string]any)
+				if ok && address["Primary"] == true {
+					if ip := firstAddress(address); ip != "" {
+						return ip
+					}
+				}
+			}
+			if address := firstAddress(addresses); address != "" {
 				return address
 			}
 		}

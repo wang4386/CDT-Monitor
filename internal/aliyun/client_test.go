@@ -2,10 +2,13 @@ package aliyun
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wang4386/CDT-Monitor/internal/domain"
 )
@@ -142,7 +145,7 @@ func TestGetInstanceDetailsPrefersEIPAndParsesInstanceIDs(t *testing.T) {
 		if err := request.ParseForm(); err != nil {
 			t.Fatal(err)
 		}
-		if request.PostForm.Get("Action") != "DescribeInstances" || request.PostForm.Get("InstanceIds") != `["i-test"]` || request.PostForm.Get("RegionId") != "cn-hongkong" {
+		if request.PostForm.Get("Action") != "DescribeInstances" || request.PostForm.Get("InstanceIds") != `["i-test"]` || request.PostForm.Get("RegionId") != "cn-hongkong" || request.PostForm.Get("AdditionalAttributes.1") != "NETWORK_PRIMARY_ENI_IP" {
 			t.Fatalf("unexpected request parameters: %v", request.PostForm)
 		}
 		return &http.Response{
@@ -162,45 +165,203 @@ func TestGetInstanceDetailsPrefersEIPAndParsesInstanceIDs(t *testing.T) {
 func TestGetInstanceDetailsFallsBackToAssignedPublicIP(t *testing.T) {
 	client := NewClient()
 	client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if err := request.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		body := `{"Instances":{"Instance":{"Status":"Stopped","PublicIpAddress":{"IpAddress":["203.0.113.9"]}}}}`
+		if request.PostForm.Get("Action") == "DescribeNetworkInterfaces" {
+			body = `{"NetworkInterfaceSets":{"NetworkInterfaceSet":[]}}`
+		}
 		return &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(`{"Instances":{"Instance":{"Status":"Stopped","PublicIpAddress":{"IpAddress":["203.0.113.9"]}}}}`)),
+			Body:       io.NopCloser(strings.NewReader(body)),
 			Header:     make(http.Header),
 			Request:    request,
 		}, nil
 	})
 
 	details, err := client.GetInstanceDetails(context.Background(), domain.Account{AccessKeyID: "LTAItest", RegionID: "cn-hongkong", InstanceID: "i-test"}, "secret")
-	if err != nil || details.Status != "Stopped" || details.PublicIP != "203.0.113.9" {
+	if err != nil || details.IPv6Error != nil || details.Status != "Stopped" || details.PublicIP != "203.0.113.9" {
 		t.Fatalf("details=%#v err=%v", details, err)
 	}
 }
 
 func TestGetInstanceDetailsOmitsMissingIPv6(t *testing.T) {
 	client := NewClient()
+	calls := 0
 	client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
-		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"Instances":{"Instance":{"Status":"Running","PublicIpAddress":{"IpAddress":"203.0.113.12"}}}}`)), Header: make(http.Header), Request: request}, nil
+		calls++
+		if err := request.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		body := `{"Instances":{"Instance":{"Status":"Running","PublicIpAddress":{"IpAddress":"203.0.113.12"}}}}`
+		if request.PostForm.Get("Action") == "DescribeNetworkInterfaces" {
+			body = `{"NetworkInterfaceSets":{"NetworkInterfaceSet":[]}}`
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: request}, nil
 	})
 
 	details, err := client.GetInstanceDetails(context.Background(), domain.Account{AccessKeyID: "LTAItest", RegionID: "cn-hongkong", InstanceID: "i-test"}, "secret")
-	if err != nil || details.PublicIP != "203.0.113.12" || details.PublicIPv6 != "" {
+	if err != nil || details.IPv6Error != nil || details.PublicIP != "203.0.113.12" || details.PublicIPv6 != "" || calls != 2 {
 		t.Fatalf("details=%#v err=%v", details, err)
+	}
+}
+
+func TestGetInstanceDetailsQueriesAttachedENIs(t *testing.T) {
+	cases := []struct {
+		name  string
+		pages []string
+		want  string
+	}{
+		{
+			name: "secondary ENI on next page",
+			pages: []string{
+				`{"NetworkInterfaceSets":{"NetworkInterfaceSet":[{"InstanceId":"i-other","Type":"Primary","Ipv6Sets":{"Ipv6Set":[{"Ipv6Address":"2001:db8::bad"}]}}]},"NextToken":"page2"}`,
+				`{"NetworkInterfaceSets":{"NetworkInterfaceSet":[{"InstanceId":"i-test","Type":"Secondary","Ipv6Sets":{"Ipv6Set":[{"Ipv6Address":"2001:db8::2"}]}}]}}`,
+			},
+			want: "2001:db8::2",
+		},
+		{
+			name: "primary ENI and primary IPv6 take precedence across pages",
+			pages: []string{
+				`{"NetworkInterfaceSets":{"NetworkInterfaceSet":[{"Type":"Secondary","Ipv6Sets":{"Ipv6Set":[{"Ipv6Address":"2001:db8::2"}]}}]},"NextToken":"page2"}`,
+				`{"NetworkInterfaceSets":{"NetworkInterfaceSet":[{"Type":"Primary","Ipv6Sets":{"Ipv6Set":[{"Ipv6Address":"2001:db8::3"},{"Ipv6Address":"2001:db8::4","Primary":true}]}}]}}`,
+			},
+			want: "2001:db8::4",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := NewClient()
+			calls, page := 0, 0
+			client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				calls++
+				if err := request.ParseForm(); err != nil {
+					t.Fatal(err)
+				}
+				body := `{"Instances":{"Instance":[{"Status":"Running","PublicIpAddress":{"IpAddress":["203.0.113.5"]}}]}}`
+				if calls == 1 {
+					if request.PostForm.Get("Action") != "DescribeInstances" || request.PostForm.Get("AdditionalAttributes.1") != "NETWORK_PRIMARY_ENI_IP" {
+						t.Fatalf("unexpected instance query: %v", request.PostForm)
+					}
+				} else {
+					form := request.PostForm
+					if form.Get("Action") != "DescribeNetworkInterfaces" || form.Get("InstanceId") != "i-test" || form.Get("RegionId") != "cn-hongkong" || form.Get("MaxResults") != "100" || form.Has("Type") {
+						t.Fatalf("unexpected ENI query: %v", form)
+					}
+					if (page == 0 && form.Has("NextToken")) || (page > 0 && form.Get("NextToken") != "page2") {
+						t.Fatalf("unexpected pagination: %v", form)
+					}
+					if page >= len(tc.pages) {
+						t.Fatal("too many ENI requests")
+					}
+					body = tc.pages[page]
+					page++
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: request}, nil
+			})
+			details, err := client.GetInstanceDetails(context.Background(), domain.Account{AccessKeyID: "LTAItest", RegionID: "cn-hongkong", InstanceID: "i-test"}, "secret")
+			if err != nil || details.IPv6Error != nil || details.PublicIPv6 != tc.want || details.Status != "Running" || details.PublicIP != "203.0.113.5" || page != len(tc.pages) {
+				t.Fatalf("details=%#v err=%v calls=%d", details, err, calls)
+			}
+		})
+	}
+}
+
+func TestGetInstanceDetailsENIFailurePreservesStatusAndIPv4(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		status     int
+		body, want string
+	}{
+		{"permission denied", http.StatusForbidden, `{"Code":"Forbidden","Message":"not authorized"}`, "http 403"},
+		{"missing wrapper", http.StatusOK, `{}`, "NetworkInterfaceSets"},
+		{"invalid list", http.StatusOK, `{"NetworkInterfaceSets":{"NetworkInterfaceSet":null}}`, "NetworkInterfaceSet"},
+		{"repeated page", http.StatusOK, `{"NetworkInterfaceSets":{"NetworkInterfaceSet":[]},"NextToken":"same"}`, "repeated NextToken"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := NewClient()
+			calls := 0
+			client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				calls++
+				status, body := tc.status, tc.body
+				if calls == 1 {
+					status, body = http.StatusOK, `{"Instances":{"Instance":[{"Status":"Running","PublicIpAddress":{"IpAddress":"203.0.113.5"}}]}}`
+				}
+				if calls > 3 {
+					t.Fatal("unbounded ENI retries")
+				}
+				return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header), Request: request}, nil
+			})
+			details, err := client.GetInstanceDetails(context.Background(), domain.Account{RegionID: "cn-hongkong", InstanceID: "i-test"}, "secret")
+			if err != nil || details.IPv6Error == nil || !strings.Contains(details.IPv6Error.Error(), tc.want) || details.Status != "Running" || details.PublicIP != "203.0.113.5" {
+				t.Fatalf("details=%#v err=%v", details, err)
+			}
+			if tc.status == http.StatusForbidden && calls != 2 {
+				t.Fatalf("permission error retried: %d calls", calls)
+			}
+		})
+	}
+}
+
+func TestGetInstanceDetailsENITimeoutAndCancellation(t *testing.T) {
+	for _, parentCancelled := range []bool{false, true} {
+		t.Run(strconv.FormatBool(parentCancelled), func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			client := NewClient()
+			calls := 0
+			client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+				calls++
+				if calls == 1 {
+					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"Instances":{"Instance":[{"Status":"Stopped","PublicIpAddress":{"IpAddress":"203.0.113.5"}}]}}`)), Header: make(http.Header), Request: request}, nil
+				}
+				deadline, ok := request.Context().Deadline()
+				if !ok || time.Until(deadline) > 3*time.Second {
+					t.Fatal("ENI query has no bounded deadline")
+				}
+				if parentCancelled {
+					cancel()
+				}
+				<-request.Context().Done()
+				return nil, request.Context().Err()
+			})
+			details, err := client.GetInstanceDetails(ctx, domain.Account{RegionID: "cn-hongkong", InstanceID: "i-test"}, "secret")
+			if parentCancelled {
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("expected caller cancellation, got %v", err)
+				}
+			} else if err != nil || !errors.Is(details.IPv6Error, context.DeadlineExceeded) || details.Status != "Stopped" || details.PublicIP != "203.0.113.5" {
+				t.Fatalf("details=%#v err=%v", details, err)
+			}
+			if calls != 2 {
+				t.Fatalf("unexpected requests after cancellation: %d", calls)
+			}
+		})
 	}
 }
 
 func TestGetInstanceDetailsParsesIPv6FromNetworkInterfaceSets(t *testing.T) {
 	client := NewClient()
+	calls := 0
 	client.httpClient.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		calls++
+		if err := request.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		if request.PostForm.Get("Action") != "DescribeInstances" || request.PostForm.Get("AdditionalAttributes.1") != "NETWORK_PRIMARY_ENI_IP" {
+			t.Fatalf("unexpected instance request: %v", request.PostForm)
+		}
 		return &http.Response{
 			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(`{"Instances":{"Instance":[{"Status":"Running","PublicIpAddress":{"IpAddress":["203.0.113.13"]},"NetworkInterface":[{"Ipv6Sets":{"Ipv6Set":[{"Ipv6Address":"2001:db8::13","Primary":true}]}}]}]}}`)),
+			Body:       io.NopCloser(strings.NewReader(`{"Instances":{"Instance":[{"Status":"Running","PublicIpAddress":{"IpAddress":["203.0.113.13"]},"NetworkInterfaces":{"NetworkInterface":[{"Type":"Primary","Ipv6Sets":{"Ipv6Set":[{"Ipv6Address":"2001:db8::13","Primary":true}]}}]}}]}}`)),
 			Header:     make(http.Header),
 			Request:    request,
 		}, nil
 	})
 
 	details, err := client.GetInstanceDetails(context.Background(), domain.Account{AccessKeyID: "LTAItest", RegionID: "cn-hongkong", InstanceID: "i-test"}, "secret")
-	if err != nil || details.PublicIP != "203.0.113.13" || details.PublicIPv6 != "2001:db8::13" {
+	if err != nil || details.IPv6Error != nil || details.PublicIP != "203.0.113.13" || details.PublicIPv6 != "2001:db8::13" || calls != 1 {
 		t.Fatalf("details=%#v err=%v", details, err)
 	}
 }

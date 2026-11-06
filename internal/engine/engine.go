@@ -335,6 +335,11 @@ func (e *Engine) processAccount(ctx context.Context, accountID int64, force bool
 			}
 		}()
 		wait.Wait()
+		if details.IPv6Error != nil {
+			_ = e.store.AddLog(ctx, "warning", fmt.Sprintf("IPv6 补充查询失败 [%s]（需 ecs:DescribeNetworkInterfaces 权限）: %v", masked(account.AccessKeyID), details.IPv6Error))
+			// Keep the last address on lookup failure; a successful empty result clears it.
+			details.PublicIPv6 = account.PublicIPv6
+		}
 		if trafficErr != nil {
 			traffic = account.TrafficUsed
 			_ = e.store.AddLog(ctx, "error", fmt.Sprintf("流量查询失败 [%s]: %v", masked(account.AccessKeyID), trafficErr))

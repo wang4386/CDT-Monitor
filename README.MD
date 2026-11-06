@@ -245,6 +245,7 @@ CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o cdt-monitor ./cmd/cdt-monit
 
 - 公网部署必须在反向代理或网关层启用 HTTPS。
 - 阿里云 RAM 用户只授予 CDT 查询、ECS 查询/启停和可选 BSS 查询所需的最小权限。
+- IPv6 采集会先请求 `DescribeInstances` 的主网卡扩展字段；未返回地址时，按实例 ID 调用 `DescribeNetworkInterfaces` 查询主、副网卡。旧 RAM 策略需补充 `ecs:DescribeNetworkInterfaces` 读取权限，并授权对应 ENI 资源（[官方授权说明](https://help.aliyun.com/zh/ecs/developer-reference/api-ecs-2014-05-26-describenetworkinterfaces)）。补查及分页最多等待 3 秒；权限不足或超时会记录警告，保留上次 IPv6，仍正常更新实例状态和 IPv4。成功查询确认无地址时才清除旧 IPv6。
 - 小组件只使用 `widget:read` Key；不要把 `instance:control` Key 放入公开脚本。
 - 定期撤销不再使用的 Key，并备份整个数据目录。
 - 不要把 `data/`、日志或 API Token 提交到 Git。
