@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive-icon foreground: a ring gauge (the app's signature visual)
+     in white + sage on transparency; background supplies the deep green. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M28,54 a26,26 0 1,0 52,0 a26,26 0 1,0 -52,0"
+        android:strokeColor="#8FC3AB"
+        android:strokeWidth="9" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M54,28 A26,26 0 0 1 78.4,62.9"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="9" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M50,54 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+</vector>

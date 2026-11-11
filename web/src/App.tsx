@@ -869,8 +869,10 @@ function NotificationSettings({ config, onChange, notify }: { config: Config; on
   const testDailyReport = async () => {
     setTestingDaily(true)
     try {
-      const job = await api<Job>('/api/v1/notifications/daily-report', { method: 'POST', body: '{}' })
-      await waitForJob(job.id)
+      await api('/api/v1/notifications/daily-report', {
+        method: 'POST',
+        body: JSON.stringify({ notifications: config.notifications }),
+      })
       notify('日报测试已发送至已启用的通知渠道', 'success')
     } catch (error) {
       notify(error instanceof Error ? error.message : '发送日报测试失败', 'error')
@@ -883,7 +885,14 @@ function NotificationSettings({ config, onChange, notify }: { config: Config; on
   const [form, setForm] = useState({ key: '', appToken: '', uid: '', token: '', secret: '' })
   const test = async () => {
     setTesting(true)
-    try { const job = await api<Job>(`/api/v1/notifications/test/${channel}`, { method: 'POST', body: '{}' }); await waitForJob(job.id); notify('测试通知已送达', 'success') }
+    try {
+      // Send the unsaved form; do not enqueue preview credentials into a persistent job.
+      await api(`/api/v1/notifications/test/${channel}`, {
+        method: 'POST',
+        body: JSON.stringify({ notifications: { [channel]: config.notifications[channel] } }),
+      })
+      notify('测试通知已送达', 'success')
+    }
     catch (error) { notify(error instanceof Error ? error.message : '测试失败', 'error') }
     finally { setTesting(false) }
   }

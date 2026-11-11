@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Static preview shown in the widget picker (Android 12+) and as the
+     initial layout before the first Glance composition lands. It mirrors the
+     MEDIUM Glance layout so what users pick is what they get. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_background"
+    android:background="@drawable/widget_bg"
     android:gravity="center_vertical"
     android:orientation="vertical">
 
@@ -12,59 +14,55 @@
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal">
+
         <TextView
-            android:id="@+id/widget_name"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="CDT Monitor"
+            android:text="CDT 实例"
             android:textColor="@color/cdt_ink"
             android:textSize="16sp"
             android:textStyle="bold" />
+
         <TextView
-            android:id="@+id/widget_status"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:background="@drawable/widget_status_pill"
             android:gravity="center"
-            android:text="未知"
-            android:textColor="@color/cdt_muted"
+            android:text="运行中"
+            android:textColor="@color/cdt_green"
             android:textSize="12sp" />
     </LinearLayout>
 
     <TextView
-        android:id="@+id/widget_usage"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:ellipsize="end"
         android:maxLines="1"
-        android:text="等待数据"
+        android:text="12.40 / 50.00 GB · 24.8%"
         android:textColor="@color/cdt_ink"
         android:textSize="13sp" />
 
     <ProgressBar
-        android:id="@+id/widget_progress"
         style="@android:style/Widget.ProgressBar.Horizontal"
         android:layout_width="match_parent"
         android:layout_height="6dp"
         android:layout_marginTop="8dp"
         android:max="100"
-        android:progress="0"
-        android:progressTint="@color/cdt_blue"
+        android:progress="25"
         android:progressBackgroundTint="@color/cdt_track"
-        android:secondaryProgressTint="@color/cdt_track" />
+        android:progressTint="@color/cdt_green" />
 
     <TextView
-        android:id="@+id/widget_updated"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
         android:ellipsize="end"
         android:maxLines="1"
-        android:text="点击刷新"
+        android:text="更新 11-11 12:00"
         android:textColor="@color/cdt_muted"
         android:textSize="11sp" />
 </LinearLayout>
