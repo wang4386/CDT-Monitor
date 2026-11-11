@@ -1,10 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Legacy launcher icon (pre-API 26): deep-green tile with the ring gauge. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="48dp"
     android:height="48dp"
     android:viewportWidth="48"
     android:viewportHeight="48">
-    <path android:fillColor="#2E6BFF" android:pathData="M8,4h32a4,4 0,0 1,4 4v32a4,4 0,0 1,-4 4H8a4,4 0,0 1,-4 -4V8a4,4 0,0 1,4 -4z" />
-    <path android:fillColor="#FFFFFF" android:pathData="M12,30h5v6h-5zM21,22h5v14h-5zM30,13h5v23h-5z" />
-    <path android:fillColor="#AFC5FF" android:pathData="M12,10h23v3h-23z" />
+    <path
+        android:fillColor="#1E5B4A"
+        android:pathData="M10,4h28a6,6 0,0 1,6 6v28a6,6 0,0 1,-6 6H10a6,6 0,0 1,-6 -6V10a6,6 0,0 1,6 -6z" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M13,24 a11,11 0 1,0 22,0 a11,11 0 1,0 -22,0"
+        android:strokeColor="#8FC3AB"
+        android:strokeWidth="4" />
+    <path
+        android:fillColor="@android:color/transparent"
+        android:pathData="M24,13 A11,11 0 0 1 34.3,27.8"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeWidth="4" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M22.3,24 a1.7,1.7 0 1,0 3.4,0 a1.7,1.7 0 1,0 -3.4,0" />
 </vector>

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Soft-light glass: bright base, a diffuse white glow top-left and a
+     whisper of sage at the bottom-right, hairline border. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="24dp" />
+            <gradient
+                android:angle="135"
+                android:endColor="#EDF3EC"
+                android:startColor="#FFFFFF"
+                android:type="linear" />
+            <stroke
+                android:width="1dp"
+                android:color="#DCE7DC" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="24dp" />
+            <gradient
+                android:centerX="0.12"
+                android:centerY="0.0"
+                android:endColor="#00FFFFFF"
+                android:gradientRadius="230dp"
+                android:startColor="#8CFFFFFF"
+                android:type="radial" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="24dp" />
+            <gradient
+                android:centerX="1.0"
+                android:centerY="1.0"
+                android:endColor="#001E5B4A"
+                android:gradientRadius="280dp"
+                android:startColor="#2E1E5B4A"
+                android:type="radial" />
+        </shape>
+    </item>
+</layer-list>

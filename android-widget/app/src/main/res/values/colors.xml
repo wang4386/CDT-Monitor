@@ -1,15 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="cdt_ink">#17212B</color>
-    <color name="cdt_muted">#667482</color>
+    <color name="cdt_ink">#15211B</color>
+    <color name="cdt_muted">#6E7F76</color>
     <color name="cdt_blue">#2E6BFF</color>
-    <color name="cdt_green">#188A55</color>
-    <color name="cdt_orange">#B56600</color>
-    <color name="cdt_red">#B42318</color>
-    <color name="cdt_surface">#F4F7FB</color>
+    <color name="cdt_teal">#0C6B58</color>
+    <color name="ic_launcher_background">#1E5B4A</color>
+    <color name="cdt_green">#1E8A4C</color>
+    <color name="cdt_orange">#E07B00</color>
+    <color name="cdt_red">#D93A2B</color>
+    <color name="cdt_surface">#EDF1EC</color>
     <color name="cdt_surface_elevated">#FFFFFF</color>
     <color name="cdt_glass_fill">#DFFFFFFF</color>
     <color name="cdt_glass_stroke">#A8FFFFFF</color>
-    <color name="cdt_border">#D5DEE9</color>
-    <color name="cdt_track">#DCE5F0</color>
+    <color name="cdt_border">#DCE7DC</color>
+    <color name="cdt_track">#DCE9E0</color>
 </resources>

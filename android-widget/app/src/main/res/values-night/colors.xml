@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="cdt_ink">#F4F7FB</color>
-    <color name="cdt_muted">#AAB7C8</color>
+    <color name="cdt_ink">#EFF4F0</color>
+    <color name="cdt_muted">#9DB0A5</color>
     <color name="cdt_blue">#8EB4FF</color>
-    <color name="cdt_green">#6AD9A4</color>
-    <color name="cdt_orange">#FFC36B</color>
-    <color name="cdt_red">#FF9186</color>
-    <color name="cdt_surface">#101821</color>
-    <color name="cdt_surface_elevated">#192431</color>
+    <color name="cdt_green">#3FA67F</color>
+    <color name="cdt_orange">#FFB340</color>
+    <color name="cdt_red">#FF6B5E</color>
+    <color name="cdt_surface">#10150F</color>
+    <color name="cdt_surface_elevated">#161D19</color>
     <color name="cdt_glass_fill">#2AFFFFFF</color>
     <color name="cdt_glass_stroke">#38FFFFFF</color>
-    <color name="cdt_border">#304254</color>
-    <color name="cdt_track">#263748</color>
+    <color name="cdt_border">#263128</color>
+    <color name="cdt_track">#26332B</color>
 </resources>

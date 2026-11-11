@@ -2,7 +2,7 @@
 <resources>
     <style name="Theme.CDTMonitor" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">@color/cdt_blue</item>
+        <item name="android:colorAccent">@color/cdt_teal</item>
         <item name="android:navigationBarColor">@color/cdt_surface</item>
         <item name="android:statusBarColor">@color/cdt_surface</item>
         <item name="android:windowActionModeOverlay">true</item>
