@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -73,6 +74,27 @@ func TestDingTalkWebhookAddsSignature(t *testing.T) {
 	want := base64.StdEncoding.EncodeToString(mac.Sum(nil))
 	if signature != want {
 		t.Fatalf("signature = %q, want %q", signature, want)
+	}
+}
+
+func TestEncodeBase64MIMEWrapsLinesAndRoundTrips(t *testing.T) {
+	body := renderEmail(domain.NotificationEvent{
+		Title:   "通知通道测试",
+		Summary: "CDT Monitor 的通知配置工作正常。",
+		Fields:  map[string]string{"发送时间": "2026-11-11 21:32:20"},
+	})
+	encoded := encodeBase64MIME(body)
+	for _, line := range strings.Split(strings.TrimSuffix(encoded, "\r\n"), "\r\n") {
+		if len(line) > 76 {
+			t.Fatalf("encoded line is %d characters, want at most 76", len(line))
+		}
+	}
+	decoded, err := base64.StdEncoding.DecodeString(strings.ReplaceAll(encoded, "\r\n", ""))
+	if err != nil {
+		t.Fatalf("encoded body does not decode: %v", err)
+	}
+	if string(decoded) != body {
+		t.Fatalf("decoded body does not match the original HTML")
 	}
 }
 

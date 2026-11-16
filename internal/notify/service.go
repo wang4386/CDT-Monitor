@@ -116,7 +116,8 @@ func sendEmail(ctx context.Context, config domain.EmailConfig, event domain.Noti
 	message := "From: CDT Monitor <" + config.Username + ">\r\n" +
 		"To: " + config.To + "\r\n" +
 		"Subject: " + subject + "\r\n" +
-		"MIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n" + renderEmail(event)
+		"MIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n" +
+		"Content-Transfer-Encoding: base64\r\n\r\n" + encodeBase64MIME(renderEmail(event))
 	if _, err = io.WriteString(writer, message); err != nil {
 		writer.Close()
 		return err
@@ -125,6 +126,24 @@ func sendEmail(ctx context.Context, config domain.EmailConfig, event domain.Noti
 		return err
 	}
 	return client.Quit()
+}
+
+// encodeBase64MIME encodes the message body as base64 wrapped at 76
+// characters per line, as required by RFC 2045. The HTML body is a single
+// long line, so sending it raw exceeds the 998-octet line limit of
+// RFC 5321 and strict SMTP servers (e.g. QQ Mail) reject it with
+// "500 Line too long".
+func encodeBase64MIME(body string) string {
+	encoded := base64.StdEncoding.EncodeToString([]byte(body))
+	var builder strings.Builder
+	for len(encoded) > 76 {
+		builder.WriteString(encoded[:76])
+		builder.WriteString("\r\n")
+		encoded = encoded[76:]
+	}
+	builder.WriteString(encoded)
+	builder.WriteString("\r\n")
+	return builder.String()
 }
 
 func renderEmail(event domain.NotificationEvent) string {
