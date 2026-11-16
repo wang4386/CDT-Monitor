@@ -99,6 +99,57 @@ jobs:
           path: release/*
           if-no-files-found: error
 
+  widget:
+    name: Build Android widget APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-widget
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Prepare release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/cdt-widget.jks"
+            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/cdt-widget.jks" >> "$GITHUB_ENV"
+          fi
+      - name: Resolve widget version
+        id: widget-version
+        shell: bash
+        run: |
+          version=$(grep -oE '\?: "[0-9]+\.[0-9]+\.[0-9]+"' app/build.gradle.kts | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Build universal release APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+        shell: bash
+        run: |
+          ./gradlew assembleRelease --no-daemon --stacktrace
+          cp app/build/outputs/apk/release/app-universal-release.apk \
+            "$RUNNER_TEMP/cdt-monitor-widget-${{ steps.widget-version.outputs.version }}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: widget-apk
+          path: ${{ runner.temp }}/cdt-monitor-widget-${{ steps.widget-version.outputs.version }}.apk
+          if-no-files-found: error
+
   publish:
     needs: build
     runs-on: ubuntu-latest
@@ -116,3 +167,43 @@ jobs:
           tag_name: ${{ inputs.tag || github.ref_name }}
           generate_release_notes: true
           files: release/*
+
+  publish-widget:
+    # The Go release above is published first and never blocked by the
+    # Android build. This job attaches the widget APK to the same release
+    # afterwards; if the APK does not land, this job fails and the run is
+    # marked red so a missing APK cannot go unnoticed.
+    needs: [publish, widget]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: widget-apk
+          path: widget
+      - name: Attach widget APK to the release and update checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk_path=$(ls widget/cdt-monitor-widget-*.apk)
+          apk_name=$(basename "$apk_path")
+          gh release upload "$TAG" "$apk_path" --clobber
+          mkdir -p sums
+          gh release download "$TAG" --pattern SHA256SUMS --dir sums
+          grep -v "$apk_name" sums/SHA256SUMS > sums/SHA256SUMS.tmp || true
+          mv sums/SHA256SUMS.tmp sums/SHA256SUMS
+          (cd widget && sha256sum "$apk_name") >> sums/SHA256SUMS
+          gh release upload "$TAG" sums/SHA256SUMS --clobber
+      - name: Verify the widget APK is on the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk_name=$(basename "$(ls widget/cdt-monitor-widget-*.apk)")
+          gh release view "$TAG" --json assets --jq '.assets[].name' | grep -qx "$apk_name"
